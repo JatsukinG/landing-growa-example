@@ -1,0 +1,78 @@
+---
+// Pie de página: marca, lema, menú, redes y acceso al panel de control.
+import { Icon } from 'astro-icon/components';
+import Marca from './Marca.astro';
+import { enlaces } from '../data/navegacion';
+import { contacto, redes } from '../data/contacto';
+
+const anio = new Date().getFullYear();
+---
+
+<footer class="bg-verde-950 text-crema">
+  <div class="contenedor py-16 sm:py-20">
+    <div class="grid gap-12 md:grid-cols-12">
+      <div class="md:col-span-5">
+        <a href="#inicio" class="inline-block h-11" aria-label="GROWA, ir al inicio">
+          <Marca class="h-full" />
+        </a>
+        <p class="mt-5 max-w-xs text-crema/60">
+          Torres verticales aeropónicas con riego automatizado. Alimentos frescos, cultivados donde vives.
+        </p>
+        {
+          redes.length > 0 && (
+            <ul class="mt-6 flex gap-2">
+              {redes.map((r) => (
+                <li>
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener"
+                    class="grid size-10 place-items-center rounded-full bg-crema/8 text-crema/80 ring-1 ring-crema/10 transition hover:bg-hoja hover:text-verde-950"
+                  >
+                    <Icon name={r.icono} class="size-5" />
+                    <span class="sr-only">{r.nombre}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+      </div>
+
+      <nav aria-label="Pie de página" class="md:col-span-3">
+        <h2 class="font-sans text-xs font-semibold tracking-[0.18em] text-crema/65 uppercase">Explora</h2>
+        <ul class="mt-4 space-y-2.5">
+          {
+            enlaces.map((e) => (
+              <li>
+                <a href={e.href} class="text-crema/75 transition hover:text-hoja">
+                  {e.texto}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+
+      <div class="md:col-span-4">
+        <h2 class="font-sans text-xs font-semibold tracking-[0.18em] text-crema/65 uppercase">¿Ya tienes tu torre?</h2>
+        <p class="mt-4 text-crema/75">Conéctate por Bluetooth y ajusta los tiempos de riego desde tu celular.</p>
+        <a href="/control" class="btn btn-hoja mt-5 py-3 text-sm">
+          <Icon name="ph:bluetooth-bold" class="size-4" /> Controlar mi torre
+        </a>
+      </div>
+    </div>
+
+    <div
+      class="mt-14 flex flex-col-reverse gap-4 border-t border-crema/10 pt-8 text-sm text-crema/65 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p>© {anio} GROWA. Todos los derechos reservados.</p>
+      <div class="flex items-center gap-5">
+        {contacto.ciudad && <span class="flex items-center gap-1.5"><Icon name="ph:map-pin" class="size-4" />{contacto.ciudad}</span>}
+        <a href="#inicio" class="flex items-center gap-1.5 transition hover:text-hoja">
+          Volver arriba <Icon name="ph:arrow-up" class="size-4" />
+        </a>
+      </div>
+    </div>
+  </div>
+</footer>

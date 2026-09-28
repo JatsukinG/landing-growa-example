@@ -1,0 +1,183 @@
+---
+// Portada: mensaje principal + torre GROWA dentro de un arco con niebla (aeroponía).
+import { Image } from 'astro:assets';
+import { Icon } from 'astro-icon/components';
+import LogoAnimado from './LogoAnimado.astro';
+// htower-torre.webp = htower.webp sin la hora ("9:33 p.m.") que tenía pegada sobre la tapa
+import torre from '../assets/fotos/htower-torre.webp';
+
+const destacados = [
+  { icono: 'ph:drop', texto: 'Riego automático' },
+  { icono: 'ph:bluetooth', texto: 'Control desde tu celular' },
+  { icono: 'ph:leaf', texto: 'Menos agua, sin tierra' },
+];
+
+// Gotas de niebla con posiciones "aleatorias" pero fijas (mismo resultado en cada build)
+const gotas = Array.from({ length: 14 }, (_, i) => ({
+  x: 12 + ((i * 37) % 76), // % horizontal dentro del arco
+  tam: 4 + ((i * 7) % 6), // px
+  dur: 5 + ((i * 3) % 5), // s
+  delay: -((i * 1.7) % 8), // s (negativo = ya en movimiento al cargar)
+}));
+---
+
+<section id="inicio" class="relative isolate overflow-x-clip bg-verde text-crema">
+  <!-- Fondo: luces suaves -->
+  <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+    <div class="absolute -top-40 -left-40 size-[36rem] rounded-full bg-verde-700/50 blur-3xl"></div>
+    <div class="absolute top-1/3 -right-48 size-[40rem] rounded-full bg-hoja/10 blur-3xl"></div>
+  </div>
+
+  <div
+    class="contenedor grid min-h-[100svh] items-center gap-14 pt-32 pb-16 md:grid-cols-[1.1fr_1fr] md:gap-10 lg:pt-36"
+  >
+    <!-- Texto -->
+    <div class="entrada">
+      <span
+        class="eyebrow rounded-pill bg-crema/8 px-3.5 py-2 text-crema/85 ring-1 ring-crema/15"
+      >
+        <Icon name="ph:plant" class="size-4 text-hoja" /> Torres verticales aeropónicas
+      </span>
+
+      <h1 class="mt-6 text-[3.25rem] leading-[0.98] font-semibold sm:text-7xl lg:text-[5.5rem]">
+        Tu huerta,<br />
+        <em class="font-normal text-hoja">en vertical.</em>
+      </h1>
+
+      <p class="mt-7 max-w-lg text-lg leading-relaxed text-crema/80 sm:text-xl">
+        La forma más rápida, ecológica y económica de cultivar desde cualquier lugar.
+        Alimentos frescos en casa, con riego automatizado.
+      </p>
+
+      <div class="mt-9 flex flex-wrap gap-3">
+        <a href="#contacto" class="btn btn-hoja">
+          Reservar mi torre <Icon name="ph:arrow-right" class="size-4" />
+        </a>
+        <a href="#como-funciona" class="btn btn-contorno text-crema hover:bg-crema/10">
+          Cómo funciona <Icon name="ph:arrow-down" class="size-4" />
+        </a>
+      </div>
+
+      <ul class="mt-12 flex flex-wrap gap-x-6 gap-y-3 text-sm text-crema/75">
+        {
+          destacados.map((d) => (
+            <li class="flex items-center gap-2">
+              <span class="grid size-8 place-items-center rounded-full bg-crema/8 text-hoja ring-1 ring-crema/10">
+                <Icon name={d.icono} class="size-4" />
+              </span>
+              {d.texto}
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+
+    <!-- Visual -->
+    <div class="entrada relative mx-auto w-full max-w-[26rem] [animation-delay:150ms]">
+      <div class="relative aspect-[4/5]">
+        <!-- Arco -->
+        <div
+          class="absolute inset-x-4 top-6 bottom-0 overflow-hidden rounded-t-full bg-gradient-to-b from-verde-700 to-verde-800 ring-1 ring-crema/10"
+          aria-hidden="true"
+        >
+          <div class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-agua/15 to-transparent"></div>
+          {
+            gotas.map((g) => (
+              <span
+                class="gota absolute bottom-0 rounded-full bg-crema/60"
+                style={`left:${g.x}%;width:${g.tam}px;height:${g.tam}px;animation-duration:${g.dur}s;animation-delay:${g.delay}s`}
+              />
+            ))
+          }
+        </div>
+
+        <!-- Sombra en el piso -->
+        <div
+          class="absolute bottom-1 left-1/2 h-6 w-3/5 -translate-x-1/2 rounded-[50%] bg-verde-950/60 blur-md"
+          aria-hidden="true"
+        >
+        </div>
+
+        <!-- Torre -->
+        <Image
+          src={torre}
+          alt="Torre vertical GROWA con lechugas creciendo en cada nivel"
+          loading="eager"
+          fetchpriority="high"
+          class="absolute bottom-3 left-1/2 h-[92%] w-auto max-w-none -translate-x-1/2 object-contain drop-shadow-[0_24px_30px_rgb(11_36_11/0.45)]"
+        />
+
+        <!-- Tarjeta: saludo de la planta -->
+        <div
+          class="flotante absolute top-[18%] -left-2 flex items-center gap-3 rounded-3xl bg-crema py-2.5 pr-4 pl-2.5 text-verde shadow-elevada sm:-left-8"
+        >
+          <span class="grid size-12 place-items-center rounded-2xl bg-hoja-suave">
+            <LogoAnimado conTexto={false} inicio="carga" class="w-9" label="" />
+          </span>
+          <span class="text-sm leading-tight">
+            <strong class="block font-display text-base">¡Hola!</strong>
+            Crezcamos juntos
+          </span>
+        </div>
+
+        <!-- Tarjeta: estado del riego (ilustra el panel /control) -->
+        <div
+          class="flotante absolute right-0 bottom-[16%] rounded-3xl bg-crema px-4 py-3 text-verde shadow-elevada [animation-delay:-3s] sm:-right-6"
+        >
+          <span class="flex items-center gap-2 text-sm font-semibold">
+            <span class="relative flex size-2.5">
+              <span class="absolute inline-flex size-full animate-ping rounded-full bg-hoja opacity-70"></span>
+              <span class="relative inline-flex size-2.5 rounded-full bg-hoja"></span>
+            </span>
+            Riego activo
+          </span>
+          <span class="mt-0.5 flex items-center gap-1.5 text-xs text-verde/80">
+            <Icon name="ph:bluetooth" class="size-3.5" /> Conectado a tu torre
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transición orgánica hacia la sección crema -->
+  <svg
+    class="relative -mb-1 block h-12 w-full text-crema sm:h-20"
+    viewBox="0 0 1440 80"
+    preserveAspectRatio="none"
+    aria-hidden="true"
+  >
+    <path fill="currentColor" d="M0 90V40C240 0 480 0 720 30s480 50 720 10v50Z"></path>
+  </svg>
+</section>
+
+<style>
+  /* Entrada suave del contenido. Sin opacity: 0 a propósito: Chrome no cuenta como
+     LCP un elemento invisible, y el título/torre de la portada son el LCP. */
+  .entrada {
+    animation: entrar 0.9s var(--ease-organica) both;
+  }
+  @keyframes entrar {
+    from { transform: translateY(24px); }
+  }
+
+  /* Niebla: gotas que suben y se desvanecen */
+  .gota {
+    animation-name: subir;
+    animation-timing-function: ease-in;
+    animation-iteration-count: infinite;
+  }
+  @keyframes subir {
+    0%   { transform: translateY(0) scale(0.6); opacity: 0; }
+    15%  { opacity: 0.9; }
+    100% { transform: translateY(-340px) scale(1.1); opacity: 0; }
+  }
+
+  /* Tarjetas flotantes */
+  .flotante {
+    animation: flotar 6s ease-in-out infinite;
+  }
+  @keyframes flotar {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+</style>

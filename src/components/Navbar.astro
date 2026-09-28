@@ -1,0 +1,173 @@
+---
+// Barra de navegación flotante.
+// Sobre el hero (verde) es transparente con texto crema; al hacer scroll se vuelve
+// una "píldora" crema translúcida con texto verde. Menú desplegable en móvil.
+import { Icon } from 'astro-icon/components';
+import Marca from './Marca.astro';
+import { enlaces } from '../data/navegacion';
+---
+
+<header id="navbar" class="group fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 sm:pt-4">
+  <nav
+    aria-label="Principal"
+    class="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 rounded-pill pr-2 pl-5 text-crema
+      transition-[background-color,color,box-shadow,backdrop-filter] duration-500
+      group-data-[solido]:bg-crema/85 group-data-[solido]:text-verde group-data-[solido]:shadow-suave
+      group-data-[solido]:ring-1 group-data-[solido]:ring-verde/5 group-data-[solido]:backdrop-blur-xl"
+  >
+    <a href="#inicio" class="h-10 shrink-0" aria-label="GROWA, ir al inicio">
+      <Marca class="h-full" />
+    </a>
+
+    <ul class="hidden items-center gap-1 md:flex">
+      {
+        enlaces.map((e) => (
+          <li>
+            <a
+              href={e.href}
+              class="nav-link relative rounded-pill px-3.5 py-2 text-sm font-medium opacity-80 transition hover:opacity-100 aria-[current]:opacity-100"
+            >
+              {e.texto}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+
+    <div class="flex items-center gap-2">
+      <a
+        href="/control"
+        class="btn btn-hoja hidden py-2.5 text-sm sm:inline-flex"
+      >
+        <Icon name="ph:bluetooth-bold" class="size-4" /> Controlar mi torre
+      </a>
+      <button
+        id="menu-boton"
+        type="button"
+        class="grid size-12 place-items-center rounded-full transition hover:bg-current/10 md:hidden"
+        aria-expanded="false"
+        aria-controls="menu-movil"
+      >
+        <span class="sr-only">Abrir menú</span>
+        <Icon name="ph:list" class="icono-abrir size-6" />
+        <Icon name="ph:x" class="icono-cerrar hidden size-6" />
+      </button>
+    </div>
+  </nav>
+
+  <!-- Menú móvil -->
+  <div
+    id="menu-movil"
+    hidden
+    class="mx-auto mt-2 max-w-6xl origin-top rounded-card bg-crema p-3 text-verde shadow-elevada ring-1 ring-verde/5 md:hidden"
+  >
+    <ul class="flex flex-col">
+      {
+        enlaces.map((e) => (
+          <li>
+            <a
+              href={e.href}
+              class="nav-link flex items-center justify-between rounded-2xl px-4 py-3.5 font-display text-2xl font-medium transition hover:bg-verde/5 aria-[current]:bg-hoja-suave"
+            >
+              {e.texto}
+              <Icon name="ph:arrow-right" class="size-5 opacity-40" />
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    <a href="/control" class="btn btn-primario mt-2 w-full">
+      <Icon name="ph:bluetooth-bold" class="size-4" /> Controlar mi torre
+    </a>
+  </div>
+</header>
+
+<style>
+  /* Subrayado orgánico del enlace activo (escritorio) */
+  .nav-link[aria-current]::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 0.2rem;
+    width: 0.35rem;
+    height: 0.35rem;
+    border-radius: 999px;
+    background: var(--color-hoja);
+    transform: translateX(-50%);
+  }
+  #menu-movil .nav-link[aria-current]::after {
+    display: none;
+  }
+  #menu-movil:not([hidden]) {
+    animation: desplegar 0.35s var(--ease-organica);
+  }
+  @keyframes desplegar {
+    from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  }
+</style>
+
+<script>
+  const header = document.getElementById('navbar')!;
+  const boton = document.getElementById('menu-boton')!;
+  const menu = document.getElementById('menu-movil')!;
+
+  // --- Fondo sólido al hacer scroll (o con el menú abierto) ---
+  let menuAbierto = false;
+  const actualizarFondo = () => {
+    header.toggleAttribute('data-solido', window.scrollY > 24 || menuAbierto);
+  };
+  window.addEventListener('scroll', actualizarFondo, { passive: true });
+  actualizarFondo();
+
+  // --- Menú móvil ---
+  const abrir = (valor: boolean) => {
+    menuAbierto = valor;
+    menu.hidden = !valor;
+    boton.setAttribute('aria-expanded', String(valor));
+    boton.querySelector('.sr-only')!.textContent = valor ? 'Cerrar menú' : 'Abrir menú';
+    boton.querySelector('.icono-abrir')!.classList.toggle('hidden', valor);
+    boton.querySelector('.icono-cerrar')!.classList.toggle('hidden', !valor);
+    actualizarFondo();
+  };
+  boton.addEventListener('click', () => abrir(!menuAbierto));
+  menu.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('a')) abrir(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && menuAbierto) {
+      abrir(false);
+      boton.focus();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (menuAbierto && !header.contains(e.target as Node)) abrir(false);
+  });
+  window.matchMedia('(min-width: 768px)').addEventListener('change', (e) => {
+    if (e.matches) abrir(false);
+  });
+
+  // --- Enlace activo según la sección visible ---
+  const links = [...document.querySelectorAll<HTMLAnchorElement>('.nav-link')];
+  const secciones = [...new Set(links.map((a) => a.hash))]
+    .map((hash) => document.querySelector<HTMLElement>(hash))
+    .filter((s): s is HTMLElement => s !== null);
+
+  const marcar = (id: string | null) => {
+    for (const a of links) {
+      if (a.hash === `#${id}`) a.setAttribute('aria-current', 'true');
+      else a.removeAttribute('aria-current');
+    }
+  };
+  const io = new IntersectionObserver(
+    (entradas) => {
+      for (const e of entradas) if (e.isIntersecting) marcar(e.target.id);
+    },
+    // "visible" = la sección cruza una franja en el centro de la pantalla
+    { rootMargin: '-45% 0px -50% 0px' },
+  );
+  secciones.forEach((s) => io.observe(s));
+  // Arriba del todo (hero) no hay enlace activo
+  new IntersectionObserver(([e]) => e.isIntersecting && marcar(null), {
+    rootMargin: '-45% 0px -50% 0px',
+  }).observe(document.getElementById('inicio')!);
+</script>

@@ -1,0 +1,116 @@
+---
+// Ventajas: las 6 de la landing anterior en una cuadrícula tipo "bento".
+// Una sola foto (tarjeta grande); el resto son tarjetas de color con icono.
+import { Image } from 'astro:assets';
+import { Icon } from 'astro-icon/components';
+import Isotipo from './Isotipo.astro';
+import fotoCosecha from '../assets/fotos/bg2.jpg';
+---
+
+<section id="ventajas" class="seccion">
+  <div class="contenedor">
+    <div data-revelar class="mx-auto max-w-2xl text-center">
+      <span class="eyebrow justify-center text-verde-500">
+        <Icon name="ph:sparkle" class="size-4" /> Ventajas
+      </span>
+      <h2 class="mt-4 text-4xl leading-[1.05] font-semibold sm:text-6xl">
+        ¿Por qué una torre <em class="font-normal text-verde-500">GROWA?</em>
+      </h2>
+      <p class="mt-5 text-lg text-verde/70">Beneficios para tu hogar y para el planeta.</p>
+    </div>
+
+    <div class="mt-14 grid auto-rows-[minmax(13rem,auto)] gap-4 md:grid-cols-2 lg:mt-16 lg:grid-cols-4">
+      <!-- Alimentos frescos (foto) -->
+      <article
+        data-revelar
+        class="group relative isolate flex min-h-[22rem] flex-col justify-end overflow-hidden rounded-card p-7 text-crema md:col-span-2 lg:row-span-2"
+      >
+        <Image
+          src={fotoCosecha}
+          alt="Manos sosteniendo una lechuga recién cosechada"
+          widths={[480, 800, 1200]}
+          sizes="(min-width: 1024px) 560px, 100vw"
+          class="absolute inset-0 -z-10 size-full object-cover transition-transform duration-[1.2s] ease-out group-hover:scale-105"
+        />
+        <div class="absolute inset-0 -z-10 bg-gradient-to-t from-verde-950/90 via-verde-950/30 to-transparent"></div>
+        <span class="grid size-12 place-items-center rounded-2xl bg-crema/15 backdrop-blur-md">
+          <Icon name="ph:carrot" class="size-6" />
+        </span>
+        <h3 class="mt-5 text-3xl font-semibold sm:text-4xl">Alimentos frescos</h3>
+        <p class="mt-2 max-w-sm text-crema/80">
+          Cultiva tus propias verduras y hierbas en casa, y cosecha justo antes de comerlas.
+        </p>
+      </article>
+
+      <!-- Ahorro de espacio -->
+      <article
+        data-revelar
+        style="--retraso: 80ms"
+        class="relative overflow-hidden rounded-card bg-verde p-7 text-crema md:col-span-2"
+      >
+        <Isotipo
+          class="pointer-events-none absolute -right-6 -bottom-10 h-56 w-auto text-crema/[0.07]"
+          label=""
+        />
+        <Icon name="ph:arrows-vertical" class="size-7 text-hoja" />
+        <h3 class="mt-5 text-2xl font-semibold">Ahorro de espacio</h3>
+        <p class="mt-2 max-w-sm text-crema/75">
+          Diseño vertical y compacto: ideal para cualquier hogar, incluso apartamentos pequeños.
+        </p>
+      </article>
+
+      <!-- Ecológico -->
+      <article
+        data-revelar
+        style="--retraso: 160ms"
+        class="relative overflow-hidden rounded-card bg-hoja-suave p-7"
+      >
+        <Icon
+          name="ph:arrows-clockwise"
+          class="giro pointer-events-none absolute -top-6 -right-6 size-32 text-verde/[0.07]"
+        />
+        <Icon name="ph:drop" class="size-7 text-verde-500" />
+        <h3 class="mt-5 text-xl font-semibold">Ecológico</h3>
+        <p class="mt-2 text-verde/70">Usa menos agua gracias a la recirculación.</p>
+      </article>
+
+      <!-- Producción rápida -->
+      <article data-revelar style="--retraso: 240ms" class="tarjeta">
+        <Icon name="ph:timer" class="size-7 text-verde-500" />
+        <h3 class="mt-5 text-xl font-semibold">Producción rápida</h3>
+        <p class="mt-2 text-verde/70">Los nutrientes llegan directo a las raíces y las plantas crecen más rápido.</p>
+      </article>
+
+      <!-- Fácil de usar -->
+      <article data-revelar class="tarjeta md:col-span-1 lg:col-span-2">
+        <Icon name="ph:smiley" class="size-7 text-verde-500" />
+        <h3 class="mt-5 text-xl font-semibold">Fácil de usar</h3>
+        <p class="mt-2 max-w-md text-verde/70">
+          No necesitas experiencia en jardinería: el riego es automático y todo se ajusta desde tu celular.
+        </p>
+      </article>
+
+      <!-- Decorativo -->
+      <article
+        data-revelar
+        style="--retraso: 80ms"
+        class="rounded-card bg-crema-200 p-7 md:col-span-1 lg:col-span-2"
+      >
+        <Icon name="ph:flower-tulip" class="size-7 text-tierra" />
+        <h3 class="mt-5 text-xl font-semibold">Decorativo</h3>
+        <p class="mt-2 max-w-md text-verde/70">
+          Un diseño elegante que le da a tu casa un toque moderno y natural.
+        </p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<style>
+  .giro {
+    animation: girar 18s linear infinite;
+  }
+  @keyframes girar {
+    to { transform: rotate(1turn); }
+  }
+</style>

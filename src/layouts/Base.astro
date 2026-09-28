@@ -1,0 +1,72 @@
+---
+import '../styles/global.css';
+// Precarga de la fuente de los títulos (la del LCP de la portada)
+import frauncesUrl from '@fontsource-variable/fraunces/files/fraunces-latin-soft-normal.woff2?url';
+import Seo from '../components/Seo.astro';
+import { sitio } from '../data/sitio';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** true en páginas que no deben aparecer en buscadores (p. ej. /control) */
+  noindex?: boolean;
+  /** imagen para compartir de esta página (en /public, 1200×630) */
+  image?: string;
+  imageAlt?: string;
+  /** incluir datos estructurados de organización/producto (solo la home) */
+  schema?: boolean;
+  /** color de la barra del navegador en móvil */
+  themeColor?: string;
+}
+
+const {
+  title = sitio.titulo,
+  description = sitio.descripcion,
+  noindex = false,
+  image,
+  imageAlt,
+  schema = false,
+  themeColor = sitio.colorTema,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <Seo {title} {description} {noindex} {image} {imageAlt} {schema} />
+    <meta name="theme-color" content={themeColor} />
+    <link rel="preload" href={frauncesUrl} as="font" type="font/woff2" crossorigin />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <meta name="generator" content={Astro.generator} />
+    <script is:inline>document.documentElement.classList.add('js');</script>
+    <slot name="head" />
+  </head>
+  <body>
+    <a
+      href="#contenido"
+      class="sr-only z-[60] rounded-pill bg-hoja px-5 py-3 font-semibold text-verde-950 shadow-elevada focus:not-sr-only focus:fixed focus:top-4 focus:left-4"
+    >
+      Saltar al contenido
+    </a>
+    <slot />
+    <script>
+      // Revela los elementos [data-revelar] cuando entran en pantalla
+      const io = new IntersectionObserver(
+        (entradas) => {
+          for (const e of entradas) {
+            if (!e.isIntersecting) continue;
+            e.target.classList.add('revelado');
+            io.unobserve(e.target);
+          }
+        },
+        { rootMargin: '0px 0px -10% 0px', threshold: 0.15 },
+      );
+      document.querySelectorAll('[data-revelar]').forEach((el) => io.observe(el));
+    </script>
+  </body>
+</html>

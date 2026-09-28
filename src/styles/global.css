@@ -1,0 +1,165 @@
+@import 'tailwindcss';
+
+/* Fraunces con ejes peso + SOFT, normal y cursiva real (los <em> de los títulos) */
+@import '@fontsource-variable/fraunces/soft.css';
+@import '@fontsource-variable/fraunces/soft-italic.css';
+@import '@fontsource-variable/instrument-sans/wght.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+
+/* ------------------------------------------------------------------
+   Tokens de marca GROWA
+   Se usan como utilidades (bg-verde, text-crema, font-display…) y como
+   variables CSS (var(--color-verde)) en componentes y en /control.
+   ------------------------------------------------------------------ */
+@theme {
+  /* Marca */
+  --color-verde: #133912;
+  --color-crema: #faeddd;
+
+  /* Derivados del verde */
+  --color-verde-950: #0b240b;
+  --color-verde-800: #1a4a19;
+  --color-verde-700: #245c22;
+  --color-verde-500: #3f7d36;
+
+  /* Derivados del crema */
+  --color-crema-50: #fdf7ef;
+  --color-crema-200: #f3e0c8;
+  --color-crema-300: #e9cfae;
+
+  /* Acentos */
+  --color-hoja: #7cbf55;
+  --color-hoja-suave: #dfe9c8;
+  --color-agua: #5bb8dc;
+  --color-tierra: #b8764a;
+  --color-alerta: #d9644f;
+  --color-ambar: #e6b35a; /* avisos (p. ej. límite de la bomba en /control) */
+
+  /* Tipografía */
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+  --font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Radios (la maceta del logo es redonda: todo es suave) */
+  --radius-card: 1.75rem;
+  --radius-pill: 999px;
+
+  /* Sombras cálidas, teñidas de verde en vez de negro */
+  --shadow-suave: 0 1px 2px rgb(19 57 18 / 0.06), 0 8px 24px -8px rgb(19 57 18 / 0.18);
+  --shadow-elevada: 0 2px 4px rgb(19 57 18 / 0.08), 0 24px 48px -16px rgb(19 57 18 / 0.3);
+
+  --ease-organica: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-flotar: flotar 6s ease-in-out infinite;
+  @keyframes flotar {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 6rem; /* navbar fija */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-crema text-verde font-sans antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display text-balance;
+    font-optical-sizing: auto;
+    /* SOFT redondea los remates de Fraunces: combina con el trazo del logo */
+    font-variation-settings: 'SOFT' 100;
+    letter-spacing: -0.02em;
+  }
+
+  p { @apply text-pretty; }
+
+  ::selection {
+    @apply bg-hoja text-verde-950;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-3 outline-hoja;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Contenedor estándar de las secciones */
+  .contenedor {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-8;
+  }
+
+  .seccion {
+    @apply py-20 sm:py-28;
+  }
+
+  /* Etiqueta pequeña encima de los títulos */
+  .eyebrow {
+    @apply inline-flex items-center gap-2 font-sans text-xs font-semibold uppercase tracking-[0.18em];
+  }
+
+  /* Botones */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill px-6 py-3.5
+      font-sans text-[0.95rem] font-semibold transition-all duration-300 ease-organica
+      active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-primario {
+    @apply bg-verde text-crema shadow-suave hover:-translate-y-0.5 hover:bg-verde-800 hover:shadow-elevada;
+  }
+  .btn-hoja {
+    @apply bg-hoja text-verde-950 shadow-suave hover:-translate-y-0.5 hover:brightness-105 hover:shadow-elevada;
+  }
+  .btn-crema {
+    @apply bg-crema text-verde shadow-suave hover:-translate-y-0.5 hover:bg-crema-50 hover:shadow-elevada;
+  }
+  .btn-contorno {
+    @apply border-[1.5px] border-current bg-transparent hover:bg-verde/5;
+  }
+
+  /* Tarjeta base */
+  .tarjeta {
+    @apply rounded-card bg-crema-50 p-7 shadow-suave ring-1 ring-verde/5;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Aparición al hacer scroll
+   Uso: <div data-revelar style="--retraso: 120ms">…</div>
+   Solo se oculta si hay JS (clase .js en <html>, ver Base.astro).
+   ------------------------------------------------------------------ */
+.js [data-revelar] {
+  opacity: 0;
+  translate: 0 28px;
+  transition:
+    opacity 0.8s ease-out,
+    translate 0.9s var(--ease-organica);
+  transition-delay: var(--retraso, 0ms);
+}
+.js [data-revelar].revelado {
+  opacity: 1;
+  translate: 0 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .js [data-revelar] {
+    opacity: 1;
+    translate: none;
+  }
+}

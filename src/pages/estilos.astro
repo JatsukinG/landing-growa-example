@@ -1,0 +1,225 @@
+---
+// Página provisional (sesión 1): guía de estilo para validar la estética
+// antes de construir las secciones reales de la landing.
+import { Image } from 'astro:assets';
+import { Icon } from 'astro-icon/components';
+import Base from '../layouts/Base.astro';
+import Isotipo from '../components/Isotipo.astro';
+import LogoAnimado from '../components/LogoAnimado.astro';
+import fotoManos from '../assets/fotos/bg2.jpg';
+import fotoTorre from '../assets/fotos/htower.jpeg';
+
+const colores = [
+  { nombre: 'Verde', token: 'verde', hex: '#133912', clase: 'bg-verde text-crema', marca: true },
+  { nombre: 'Crema', token: 'crema', hex: '#FAEDDD', clase: 'bg-crema text-verde ring-1 ring-verde/10', marca: true },
+  { nombre: 'Verde 950', token: 'verde-950', hex: '#0B240B', clase: 'bg-verde-950 text-crema' },
+  { nombre: 'Verde 700', token: 'verde-700', hex: '#245C22', clase: 'bg-verde-700 text-crema' },
+  { nombre: 'Verde 500', token: 'verde-500', hex: '#3F7D36', clase: 'bg-verde-500 text-crema' },
+  { nombre: 'Crema 50', token: 'crema-50', hex: '#FDF7EF', clase: 'bg-crema-50 text-verde ring-1 ring-verde/10' },
+  { nombre: 'Crema 200', token: 'crema-200', hex: '#F3E0C8', clase: 'bg-crema-200 text-verde' },
+  { nombre: 'Hoja', token: 'hoja', hex: '#7CBF55', clase: 'bg-hoja text-verde-950' },
+  { nombre: 'Hoja suave', token: 'hoja-suave', hex: '#DFE9C8', clase: 'bg-hoja-suave text-verde' },
+  { nombre: 'Agua', token: 'agua', hex: '#5BB8DC', clase: 'bg-agua text-verde-950' },
+  { nombre: 'Tierra', token: 'tierra', hex: '#B8764A', clase: 'bg-tierra text-crema' },
+  { nombre: 'Alerta', token: 'alerta', hex: '#D9644F', clase: 'bg-alerta text-crema' },
+];
+
+const muestras = [
+  { icono: 'ph:smiley', titulo: 'Fácil de usar', texto: 'No necesitas experiencia previa. El sistema es simple y automatizado.' },
+  { icono: 'ph:drop', titulo: 'Ecológico', texto: 'Consume menos agua gracias a la recirculación.' },
+  { icono: 'ph:bluetooth', titulo: 'Control desde el celular', texto: 'Ajusta los ciclos de riego por Bluetooth, sin cables ni apps.' },
+];
+---
+
+<Base title="Guía de estilo — GROWA" noindex>
+  <!-- Muestra "hero" sobre verde -->
+  <header class="relative bg-verde text-crema">
+    <div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+      <div class="absolute -right-32 -top-32 size-[28rem] rounded-full bg-verde-700/60 blur-3xl"></div>
+    </div>
+    <div class="contenedor relative grid items-center gap-12 py-20 sm:py-28 md:grid-cols-[1.2fr_1fr]">
+      <div>
+        <span class="eyebrow text-hoja">
+          <Icon name="ph:plant" class="size-4" /> Guía de estilo · Sesión 1
+        </span>
+        <h1 class="mt-5 text-5xl font-semibold leading-[1.02] sm:text-7xl">
+          Cultiva vida <em class="font-normal text-hoja">en vertical.</em>
+        </h1>
+        <p class="mt-6 max-w-xl text-lg text-crema/80">
+          La forma más rápida, ecológica y económica de cultivar desde cualquier lugar.
+        </p>
+        <div class="mt-9 flex flex-wrap gap-3">
+          <a href="#colores" class="btn btn-hoja">
+            Reservar ahora <Icon name="ph:arrow-right" class="size-4" />
+          </a>
+          <a href="#tipografia" class="btn btn-contorno text-crema hover:bg-crema/10">Ver cómo funciona</a>
+        </div>
+      </div>
+      <div class="flex justify-center">
+        <div class="animate-flotar rounded-[3rem] bg-crema p-10 shadow-elevada">
+          <LogoAnimado conTexto={false} inicio="carga" class="w-40 text-verde sm:w-52" />
+        </div>
+      </div>
+    </div>
+    <svg class="-mb-px block w-full text-crema" viewBox="0 0 1440 80" preserveAspectRatio="none" aria-hidden="true">
+      <path fill="currentColor" d="M0 90V40C240 0 480 0 720 30s480 50 720 10v50Z"></path>
+    </svg>
+  </header>
+
+  <main>
+    <!-- Colores -->
+    <section id="colores" class="seccion">
+      <div class="contenedor">
+        <span class="eyebrow text-verde-500">01 · Color</span>
+        <h2 class="mt-3 text-4xl font-semibold sm:text-5xl">Paleta</h2>
+        <p class="mt-3 max-w-2xl text-verde/70">
+          Verde y crema son la marca. Los derivados dan profundidad; hoja y agua se usan como acentos puntuales
+          (estados, detalles de riego), nunca como fondo principal.
+        </p>
+        <div class="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {
+            colores.map((c) => (
+              <div class:list={['flex aspect-[4/3] flex-col justify-end rounded-card p-5', c.clase]}>
+                <span class="font-display text-lg font-semibold">
+                  {c.nombre}
+                  {c.marca && <span class="ml-1 align-middle text-[0.65rem] font-sans uppercase tracking-widest opacity-70">marca</span>}
+                </span>
+                <code class="font-mono text-xs opacity-75">
+                  {c.hex} · {c.token}
+                </code>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- Tipografía -->
+    <section id="tipografia" class="seccion bg-crema-200/60">
+      <div class="contenedor grid gap-14 lg:grid-cols-2">
+        <div>
+          <span class="eyebrow text-verde-500">02 · Tipografía</span>
+          <h2 class="mt-3 text-4xl font-semibold sm:text-5xl">Fraunces + Instrument Sans</h2>
+          <p class="mt-4 text-verde/70">
+            Fraunces (con el eje <em>SOFT</em> al máximo) para titulares: sus remates redondeados combinan con el
+            trazo del logo. Instrument Sans para texto e interfaz. IBM Plex Mono solo para números del panel de control.
+          </p>
+          <div class="mt-8 space-y-2 font-mono text-xs text-verde/60">
+            <p>font-display · font-sans · font-mono</p>
+          </div>
+        </div>
+        <div class="space-y-6">
+          <p class="font-display text-6xl font-semibold leading-none">Aa Ññ</p>
+          <p class="font-display text-4xl font-semibold leading-tight">Alimentos frescos en casa</p>
+          <p class="font-display text-2xl font-medium italic">Menos agua, más cosecha.</p>
+          <p class="text-lg leading-relaxed">
+            Un sistema de cultivo doméstico alternativo e innovador que busca concientizar a la gente y brindar
+            alternativas de sostenibilidad.
+          </p>
+          <p class="text-sm text-verde/70">
+            Texto secundario — ideal para descripciones cortas, notas y pies de foto.
+          </p>
+          <div class="flex gap-6 rounded-2xl bg-verde-950 p-5 font-mono text-crema">
+            <div><span class="block text-[0.65rem] text-crema/60">Restante</span><span class="text-xl">4:32</span></div>
+            <div><span class="block text-[0.65rem] text-crema/60">Encendido</span><span class="text-xl">5:00</span></div>
+            <div><span class="block text-[0.65rem] text-crema/60">Apagado</span><span class="text-xl">10:00</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Componentes -->
+    <section class="seccion">
+      <div class="contenedor">
+        <span class="eyebrow text-verde-500">03 · Componentes</span>
+        <h2 class="mt-3 text-4xl font-semibold sm:text-5xl">Botones y tarjetas</h2>
+
+        <div class="mt-10 flex flex-wrap items-center gap-3">
+          <button class="btn btn-primario">Primario</button>
+          <button class="btn btn-hoja">Acento hoja</button>
+          <button class="btn btn-contorno">Contorno</button>
+          <button class="btn btn-primario" disabled>Deshabilitado</button>
+          <span class="rounded-pill bg-verde p-2"><button class="btn btn-crema">Crema sobre verde</button></span>
+        </div>
+
+        <div class="mt-12 grid gap-5 md:grid-cols-3">
+          {
+            muestras.map((m) => (
+              <article class="tarjeta group transition-transform duration-500 ease-organica hover:-translate-y-1.5">
+                <div class="grid size-14 place-items-center rounded-2xl bg-hoja-suave text-verde transition-colors duration-300 group-hover:bg-verde group-hover:text-crema">
+                  <Icon name={m.icono} class="size-7" />
+                </div>
+                <h3 class="mt-6 text-xl font-semibold">{m.titulo}</h3>
+                <p class="mt-2 text-verde/70">{m.texto}</p>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- Logo animado -->
+    <section class="seccion bg-verde-950 text-crema">
+      <div class="contenedor">
+        <span class="eyebrow text-hoja">04 · Marca</span>
+        <h2 class="mt-3 text-4xl font-semibold sm:text-5xl">Logo animado</h2>
+        <p class="mt-3 max-w-2xl text-crema/75">
+          Se anima al aparecer en pantalla. Haz clic (o Enter) sobre cualquiera para repetir.
+          Toma el color del texto: <code class="font-mono text-sm">text-crema</code> o <code class="font-mono text-sm">text-verde</code>.
+        </p>
+        <div class="mt-12 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+          <div class="grid place-items-center rounded-card bg-verde px-6 py-16">
+            <LogoAnimado class="w-full max-w-md text-crema" />
+          </div>
+          <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
+            <div class="grid place-items-center rounded-card bg-crema px-6 py-10">
+              <LogoAnimado class="w-full max-w-60 text-verde" />
+            </div>
+            <div class="flex items-center justify-center gap-8 rounded-card bg-hoja-suave px-6 py-10">
+              <LogoAnimado conTexto={false} class="w-16 text-verde" />
+              <LogoAnimado conTexto={false} bucle={false} class="w-10 text-verde" />
+              <Isotipo class="h-12 w-auto text-verde" />
+            </div>
+          </div>
+        </div>
+        <p class="mt-4 font-mono text-xs text-crema/50">
+          Props: conTexto · bucle · inicio="visible|carga" · class. Última tarjeta: animado con bucle, sin bucle, e Isotipo estático.
+        </p>
+      </div>
+    </section>
+
+    <!-- Imágenes -->
+    <section class="seccion bg-verde text-crema">
+      <div class="contenedor">
+        <span class="eyebrow text-hoja">05 · Imágenes</span>
+        <h2 class="mt-3 text-4xl font-semibold sm:text-5xl">Fotos con esquinas orgánicas</h2>
+        <p class="mt-3 max-w-2xl text-crema/75">
+          Procesadas con <code class="font-mono text-sm">astro:assets</code> (WebP y tamaños responsivos automáticos).
+        </p>
+        <div class="mt-10 grid gap-5 md:grid-cols-5">
+          <Image
+            src={fotoManos}
+            alt="Manos sosteniendo una lechuga con sus raíces"
+            widths={[480, 800, 1200]}
+            sizes="(min-width: 768px) 60vw, 100vw"
+            class="h-80 w-full rounded-[2.5rem_0.75rem_2.5rem_0.75rem] object-cover md:col-span-3"
+          />
+          <Image
+            src={fotoTorre}
+            alt="Lechuga creciendo en una torre GROWA"
+            widths={[400, 700]}
+            sizes="(min-width: 768px) 40vw, 100vw"
+            class="h-80 w-full rounded-[0.75rem_2.5rem_0.75rem_2.5rem] object-cover md:col-span-2"
+          />
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bg-verde-950 py-10 text-crema/70">
+    <div class="contenedor flex items-center gap-3 text-sm">
+      <Isotipo class="h-8 w-auto text-crema" label="" />
+      <span>GROWA · guía de estilo provisional</span>
+    </div>
+  </footer>
+</Base>

@@ -1,0 +1,89 @@
+---
+// Contacto: panel de llamada a la acción (reservar por WhatsApp) + canales.
+// Los datos salen de src/data/contacto.ts (marcadores fáciles de reemplazar).
+import { Icon } from 'astro-icon/components';
+import LogoAnimado from './LogoAnimado.astro';
+import { contacto, enlaceWhatsapp, enlaceEmail, redes } from '../data/contacto';
+
+const canales = [
+  {
+    icono: 'ph:whatsapp-logo',
+    etiqueta: 'WhatsApp',
+    valor: contacto.whatsappVisible,
+    url: enlaceWhatsapp('Hola GROWA, tengo una pregunta sobre las torres 🌱'),
+  },
+  { icono: 'ph:envelope-simple', etiqueta: 'Correo', valor: contacto.email, url: enlaceEmail },
+  ...redes.map((r) => ({ icono: r.icono, etiqueta: r.nombre, valor: r.usuario, url: r.url })),
+  contacto.ciudad && { icono: 'ph:map-pin', etiqueta: 'Ubicación', valor: contacto.ciudad, url: '' },
+].filter((c): c is { icono: string; etiqueta: string; valor: string; url: string } => Boolean(c));
+---
+
+<section id="contacto" class="seccion">
+  <div class="contenedor">
+    <div
+      data-revelar
+      class="relative isolate grid overflow-hidden rounded-[3rem] bg-verde px-6 py-14 text-crema sm:px-12 sm:py-16 lg:grid-cols-12 lg:gap-12 lg:p-20"
+    >
+      <!-- Decoración -->
+      <div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
+        <div class="absolute -top-32 -right-32 size-[30rem] rounded-full bg-verde-700/60 blur-3xl"></div>
+        <div class="absolute -bottom-40 -left-24 size-[26rem] rounded-full bg-hoja/10 blur-3xl"></div>
+      </div>
+
+      <!-- Mensaje + CTA -->
+      <div class="lg:col-span-7">
+        <LogoAnimado conTexto={false} class="w-16 text-crema sm:w-20" label="" />
+        <h2 class="mt-6 text-4xl leading-[1.05] font-semibold sm:text-6xl">
+          ¿Listo para cultivar <em class="font-normal text-hoja">en casa?</em>
+        </h2>
+        <p class="mt-5 max-w-lg text-lg leading-relaxed text-crema/75">
+          Reserva tu torre o escríbenos si tienes preguntas. Te respondemos lo antes posible.
+        </p>
+        <div class="mt-9 flex flex-wrap gap-3">
+          <a href={enlaceWhatsapp()} target="_blank" rel="noopener" class="btn btn-hoja">
+            <Icon name="ph:whatsapp-logo" class="size-5" /> Reservar por WhatsApp
+          </a>
+          <a href={enlaceEmail} class="btn btn-contorno text-crema hover:bg-crema/10">
+            <Icon name="ph:envelope-simple" class="size-5" /> Escribir un correo
+          </a>
+        </div>
+      </div>
+
+      <!-- Canales -->
+      <ul class="mt-12 flex flex-col gap-2 lg:col-span-5 lg:mt-0 lg:self-center">
+        {
+          canales.map((c) => {
+            const Etiqueta = c.url ? 'a' : 'div';
+            return (
+              <li>
+                <Etiqueta
+                  href={c.url || undefined}
+                  target={c.url.startsWith('http') ? '_blank' : undefined}
+                  rel={c.url.startsWith('http') ? 'noopener' : undefined}
+                  class:list={[
+                    'group flex items-center gap-4 rounded-2xl p-3 pr-4 ring-1 ring-crema/10 transition',
+                    c.url && 'hover:bg-crema/8 hover:ring-crema/20',
+                  ]}
+                >
+                  <span class="grid size-11 shrink-0 place-items-center rounded-xl bg-crema/10 text-hoja">
+                    <Icon name={c.icono} class="size-5" />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-xs font-semibold tracking-wider text-crema/65 uppercase">{c.etiqueta}</span>
+                    <span class="block truncate font-medium">{c.valor}</span>
+                  </span>
+                  {c.url && (
+                    <Icon
+                      name="ph:arrow-up-right"
+                      class="size-4 text-crema/40 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-hoja"
+                    />
+                  )}
+                </Etiqueta>
+              </li>
+            );
+          })
+        }
+      </ul>
+    </div>
+  </div>
+</section>

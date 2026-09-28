@@ -1,0 +1,23 @@
+---
+import { Icon } from 'astro-icon/components';
+import Base from '../layouts/Base.astro';
+import LogoAnimado from '../components/LogoAnimado.astro';
+---
+
+<Base title="Página no encontrada — GROWA" noindex>
+  <main id="contenido" class="grid min-h-svh place-items-center bg-verde px-5 text-center text-crema">
+    <div>
+      <LogoAnimado conTexto={false} inicio="carga" class="mx-auto w-24" label="" />
+      <p class="eyebrow mt-8 justify-center text-hoja">Error 404</p>
+      <h1 class="mt-3 text-4xl font-semibold sm:text-6xl">
+        Esta página <em class="font-normal text-hoja">no ha brotado.</em>
+      </h1>
+      <p class="mx-auto mt-5 max-w-md text-crema/70">
+        Puede que el enlace esté mal escrito o que la página ya no exista.
+      </p>
+      <a href="/" class="btn btn-hoja mt-9">
+        <Icon name="ph:arrow-left" class="size-4" /> Volver al inicio
+      </a>
+    </div>
+  </main>
+</Base>

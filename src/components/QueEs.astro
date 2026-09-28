@@ -1,0 +1,90 @@
+---
+// ¿Qué es GROWA? — propósito, qué son las torres y los tres pilares (compactos:
+// las ventajas en detalle van en su propia sección).
+import { Image } from 'astro:assets';
+import { Icon } from 'astro-icon/components';
+import Isotipo from './Isotipo.astro';
+import fotoInvernadero from '../assets/fotos/bg1.jpg';
+
+const pilares = [
+  { icono: 'ph:lightbulb', titulo: 'Innovación' },
+  { icono: 'ph:arrows-in-simple', titulo: 'Optimización' },
+  { icono: 'ph:recycle', titulo: 'Reutilización' },
+];
+---
+
+<section id="que-es" class="seccion relative overflow-x-clip">
+  <div class="contenedor grid items-center gap-16 lg:grid-cols-12 lg:gap-20">
+    <!-- Foto + sello -->
+    <div data-revelar class="relative mx-auto w-full max-w-md lg:col-span-5 lg:max-w-none">
+      <Image
+        src={fotoInvernadero}
+        alt="Torres verticales llenas de lechugas dentro de un invernadero"
+        widths={[480, 720, 960]}
+        sizes="(min-width: 1024px) 440px, 90vw"
+        class="aspect-[4/5] w-full rounded-[3rem_0.75rem_3rem_0.75rem] object-cover shadow-elevada"
+      />
+
+      <!-- Sello giratorio -->
+      <div
+        class="absolute -right-4 -bottom-10 grid size-28 place-items-center rounded-full bg-crema-50 text-verde shadow-elevada ring-1 ring-verde/5 sm:-right-10 sm:size-36"
+        aria-hidden="true"
+      >
+        <svg viewBox="0 0 100 100" class="sello absolute inset-0 size-full">
+          <defs>
+            <path id="sello-circulo" d="M50,50 m-38,0 a38,38 0 1,1 76,0 a38,38 0 1,1 -76,0"></path>
+          </defs>
+          <text class="fill-current font-sans text-[8.4px] font-semibold tracking-[0.2em] uppercase">
+            <textPath href="#sello-circulo">Torres verticales · aeropónicas ·</textPath>
+          </text>
+        </svg>
+        <Isotipo class="h-11 w-auto sm:h-14" label="" />
+      </div>
+    </div>
+
+    <!-- Texto -->
+    <div class="lg:col-span-7">
+      <div data-revelar>
+        <span class="eyebrow text-verde-500">
+          <Icon name="ph:plant" class="size-4" /> Sobre GROWA
+        </span>
+        <h2 class="mt-4 text-4xl leading-[1.05] font-semibold sm:text-6xl">
+          Alimentos limpios, <em class="font-normal text-verde-500">cultivados donde vives.</em>
+        </h2>
+        <p class="mt-6 max-w-xl text-lg leading-relaxed text-verde/75">
+          Nuestro propósito es producir alimentos limpios basados en la sostenibilidad ambiental,
+          la innovación y el aprovechamiento del espacio.
+        </p>
+      </div>
+
+      <div data-revelar style="--retraso: 120ms" class="mt-10 max-w-xl rounded-card bg-crema-200/60 p-7 sm:p-8">
+        <h3 class="text-2xl font-semibold">¿Qué son las torres GROWA?</h3>
+        <p class="mt-3 leading-relaxed text-verde/75">
+          Un sistema de cultivo doméstico donde las raíces crecen al aire y reciben agua con nutrientes
+          en forma de niebla. Una alternativa sostenible para cultivar en casa, sin tierra.
+        </p>
+        <ul class="mt-6 flex flex-wrap gap-2">
+          {
+            pilares.map((p) => (
+              <li class="inline-flex items-center gap-2 rounded-pill bg-crema-50 py-2 pr-4 pl-2.5 text-sm font-semibold ring-1 ring-verde/5">
+                <span class="grid size-7 place-items-center rounded-full bg-hoja-suave">
+                  <Icon name={p.icono} class="size-4" />
+                </span>
+                {p.titulo}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .sello {
+    animation: girar 22s linear infinite;
+  }
+  @keyframes girar {
+    to { transform: rotate(1turn); }
+  }
+</style>

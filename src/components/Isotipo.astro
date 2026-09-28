@@ -1,0 +1,31 @@
+---
+// Isotipo GROWA (planta + carita + maceta, sin letras).
+// Toma el color del texto que lo rodea: usar text-verde / text-crema.
+import svgRaw from '../assets/brand/growa-isotipo.svg?raw';
+
+interface Props {
+  class?: string;
+  /** texto alternativo; vacío = decorativo */
+  label?: string;
+}
+
+const { class: className, label = 'GROWA' } = Astro.props;
+
+// IDs únicos por instancia: los clipPath del SVG no pueden repetirse en la misma página
+const uid = `iso-${Math.random().toString(36).slice(2, 8)}`;
+const [, viewBox] = svgRaw.match(/viewBox="([^"]+)"/)!;
+const contenido = svgRaw
+  .replace(/^[\s\S]*?<svg[^>]*>|<\/svg>\s*$/g, '')
+  .replace(/id="([^"]+)"/g, `id="${uid}-$1"`)
+  .replace(/url\(#([^)]+)\)/g, `url(#${uid}-$1)`);
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox={viewBox}
+  class={className}
+  role={label ? 'img' : undefined}
+  aria-label={label || undefined}
+  aria-hidden={label ? undefined : 'true'}
+  set:html={contenido}
+/>

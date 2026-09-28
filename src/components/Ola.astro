@@ -1,0 +1,38 @@
+---
+// Transición orgánica entre dos secciones de distinto color.
+// <Ola arriba="crema" abajo="verde" />  · invertir = espejo horizontal
+type Color = 'crema' | 'crema-200' | 'verde' | 'verde-950';
+
+interface Props {
+  arriba: Color;
+  abajo: Color;
+  invertir?: boolean;
+}
+
+const { arriba, abajo, invertir = false } = Astro.props;
+
+// Clases literales para que Tailwind las detecte
+const fondo: Record<Color, string> = {
+  crema: 'bg-crema',
+  'crema-200': 'bg-crema-200',
+  verde: 'bg-verde',
+  'verde-950': 'bg-verde-950',
+};
+const trazo: Record<Color, string> = {
+  crema: 'text-crema',
+  'crema-200': 'text-crema-200',
+  verde: 'text-verde',
+  'verde-950': 'text-verde-950',
+};
+---
+
+<div class:list={['relative z-10', fondo[arriba]]} aria-hidden="true">
+  <svg
+    class:list={['relative -mb-1 block h-12 w-full sm:h-20', trazo[abajo], invertir && '-scale-x-100']}
+    viewBox="0 0 1440 80"
+    preserveAspectRatio="none"
+  >
+    <!-- el SVG se solapa 4px con la sección de abajo: así el borde inferior no deja una línea -->
+    <path fill="currentColor" d="M0 90V40C240 0 480 0 720 30s480 50 720 10v50Z"></path>
+  </svg>
+</div>

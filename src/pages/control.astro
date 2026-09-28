@@ -1,0 +1,587 @@
+---
+// Panel de control de la torre por Bluetooth (Web Bluetooth → ESP32-C3).
+// Migrado de ../index.html. La lógica BLE (UUIDs, formato JSON, flujo de conexión)
+// se copió SIN CAMBIOS en el <script is:inline> del final. Los IDs y clases que usa
+// ese script (ring, pump-label, cycle-marker, connect-btn, form-message…) deben
+// conservarse si se cambia el diseño.
+import { Icon } from 'astro-icon/components';
+import Base from '../layouts/Base.astro';
+import Marca from '../components/Marca.astro';
+---
+
+<Base
+  title="Controlar mi torre — GROWA"
+  description="Panel de riego de la torre GROWA por Bluetooth."
+  noindex
+  themeColor="#0b240b"
+>
+  <div class="panel-control">
+    <header class="mx-auto flex w-full max-w-[30rem] items-center justify-between px-5 pt-6">
+      <a href="/" class="h-9" aria-label="GROWA, ir al sitio">
+        <Marca class="h-full text-crema" />
+      </a>
+      <a href="/" class="inline-flex items-center gap-1.5 text-sm text-crema/60 transition hover:text-hoja">
+        <Icon name="ph:arrow-left" class="size-4" /> Volver al sitio
+      </a>
+    </header>
+
+    <main id="contenido" class="app">
+      <span class="eyebrow text-hoja"><Icon name="ph:drop" class="size-4" /> Panel de riego</span>
+      <h1>Tu torre</h1>
+      <p class="subtitle">Control de la bomba de riego por Bluetooth de bajo consumo.</p>
+
+      <!-- Aviso de compatibilidad (se muestra al cargar si no hay Web Bluetooth) -->
+      <div id="avisoCompat" class="aviso-compat" role="alert" hidden>
+        <Icon name="ph:warning-circle" class="size-6 shrink-0" />
+        <div>
+          <strong>Tu navegador no puede conectarse por Bluetooth.</strong>
+          <p>
+            Abre esta página en <b>Chrome</b> o <b>Edge</b> desde un computador o un celular Android.
+            No funciona en iPhone, Safari ni Firefox.
+          </p>
+        </div>
+      </div>
+
+      <section class="status-card" aria-live="polite">
+        <div class="indicator-row">
+          <div class="ring off" id="ring"></div>
+          <div class="pump-label state-off" id="pumpLabel">Sin conexión</div>
+        </div>
+
+        <div class="cycle-bar" id="cycleBar">
+          <div class="seg-on" id="segOn" style="width:33%">
+            <div class="cycle-marker" id="cycleMarker" style="left:0%"></div>
+          </div>
+          <div class="seg-off" id="segOff" style="width:67%"></div>
+        </div>
+        <div class="cycle-caption">
+          <span>Encendido</span>
+          <span>Apagado</span>
+        </div>
+
+        <div class="readouts">
+          <div class="readout">
+            <span class="readout-label">Restante</span>
+            <span class="readout-value mono" id="remainingVal">—:—</span>
+          </div>
+          <div class="readout">
+            <span class="readout-label">Encendido</span>
+            <span class="readout-value mono" id="onVal">—:—</span>
+          </div>
+          <div class="readout">
+            <span class="readout-label">Apagado</span>
+            <span class="readout-value mono" id="offVal">—:—</span>
+          </div>
+        </div>
+      </section>
+
+      <button class="connect-btn" id="connectBtn">Conectar con la torre</button>
+      <p class="conn-note" id="connNote">Requiere Chrome o Edge con Bluetooth activado. No funciona en Safari/iOS.</p>
+
+      <section class="config-card">
+        <h2>Configurar ciclos de riego</h2>
+        <p class="hint" id="maxHint">Conéctate para ver el máximo permitido por el fabricante de la bomba.</p>
+
+        <form id="configForm">
+          <div class="field">
+            <label for="onInput">Tiempo encendido (minutos)</label>
+            <input type="number" id="onInput" step="any" min="0" required disabled />
+            <div class="field-note" id="onNote"></div>
+          </div>
+          <div class="field">
+            <label for="offInput">Tiempo apagado (minutos)</label>
+            <input type="number" id="offInput" step="any" min="0" required disabled />
+          </div>
+          <button type="submit" class="save-btn" id="saveBtn" disabled>Guardar cambios</button>
+        </form>
+        <p class="form-message" id="formMessage"></p>
+      </section>
+
+      <p class="ayuda">
+        <Icon name="ph:lightbulb" class="size-4 shrink-0" />
+        ¿No aparece tu torre? Activa el Bluetooth del dispositivo y acércate a ella.
+      </p>
+    </main>
+  </div>
+
+  <!-- Aviso de compatibilidad al cargar (antes solo se avisaba al tocar "Conectar") -->
+  <script is:inline>
+    if (!navigator.bluetooth) {
+      document.getElementById('avisoCompat').hidden = false;
+      document.getElementById('connectBtn').disabled = true;
+      document.getElementById('connNote').textContent = window.isSecureContext
+        ? 'Este navegador no soporta Web Bluetooth.'
+        : 'Web Bluetooth requiere una conexión segura (HTTPS).';
+    }
+  </script>
+
+  <!-- Lógica BLE original (copiada sin cambios de ../index.html) -->
+  <script is:inline>
+const SERVICE_UUID = '12345678-1234-5678-1234-56789abcdef0';
+const STATUS_UUID  = '12345678-1234-5678-1234-56789abcdef1';
+const CONFIG_UUID  = '12345678-1234-5678-1234-56789abcdef2';
+
+const connectBtn   = document.getElementById('connectBtn');
+const connNote     = document.getElementById('connNote');
+const ring         = document.getElementById('ring');
+const pumpLabel    = document.getElementById('pumpLabel');
+const segOn        = document.getElementById('segOn');
+const segOff       = document.getElementById('segOff');
+const cycleMarker  = document.getElementById('cycleMarker');
+const remainingVal = document.getElementById('remainingVal');
+const onVal        = document.getElementById('onVal');
+const offVal       = document.getElementById('offVal');
+const maxHint      = document.getElementById('maxHint');
+const onInput      = document.getElementById('onInput');
+const offInput     = document.getElementById('offInput');
+const onNote       = document.getElementById('onNote');
+const saveBtn      = document.getElementById('saveBtn');
+const configForm   = document.getElementById('configForm');
+const formMessage  = document.getElementById('formMessage');
+
+let device = null, statusChar = null, configChar = null;
+let maxOnSec = null, curOnSec = null, curOffSec = null, curPumpOn = null;
+let localRemaining = null;
+let tickHandle = null;
+
+function fmtMinSec(totalSec) {
+  totalSec = Math.max(0, Math.round(totalSec));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function setFormMessage(text, kind) {
+  formMessage.textContent = text || '';
+  formMessage.className = 'form-message' + (kind ? ' ' + kind : '');
+}
+
+function renderCycleBar() {
+  if (!curOnSec || !curOffSec) return;
+  const total = curOnSec + curOffSec;
+  const onPct = (curOnSec / total) * 100;
+  segOn.style.width = onPct + '%';
+  segOff.style.width = (100 - onPct) + '%';
+
+  const phaseTotal = curPumpOn ? curOnSec : curOffSec;
+  const elapsed = phaseTotal - localRemaining;
+  let markerPct;
+  if (curPumpOn) {
+    markerPct = (Math.max(0, elapsed) / curOnSec) * onPct;
+  } else {
+    markerPct = onPct + (Math.max(0, elapsed) / curOffSec) * (100 - onPct);
+  }
+  cycleMarker.style.left = Math.min(100, Math.max(0, markerPct)) + '%';
+}
+
+function renderPumpState() {
+  ring.className = 'ring ' + (curPumpOn ? 'on' : 'off');
+  pumpLabel.className = 'pump-label ' + (curPumpOn ? 'state-on' : 'state-off');
+  pumpLabel.innerHTML = curPumpOn
+    ? 'Bomba <span class="state-word">encendida</span>'
+    : 'Bomba <span class="state-word">apagada</span>';
+}
+
+function renderReadouts() {
+  remainingVal.textContent = fmtMinSec(localRemaining);
+  onVal.textContent = fmtMinSec(curOnSec);
+  offVal.textContent = fmtMinSec(curOffSec);
+}
+
+function restartTicker() {
+  if (tickHandle) clearInterval(tickHandle);
+  tickHandle = setInterval(() => {
+    if (localRemaining > 0) localRemaining -= 1;
+    renderReadouts();
+    renderCycleBar();
+  }, 1000);
+}
+
+function applyStatus(data) {
+  maxOnSec = data.maxOnSec;
+  curOnSec = data.onSec;
+  curOffSec = data.offSec;
+  curPumpOn = data.pump === 1;
+  localRemaining = data.remainingSec;
+
+  renderPumpState();
+  renderReadouts();
+  renderCycleBar();
+  restartTicker();
+
+  maxHint.textContent = 'Máximo permitido: ' + fmtMinSec(maxOnSec) + ' min — límite indicado por el fabricante de la bomba.';
+  onInput.max = (maxOnSec / 60).toString();
+  onNote.textContent = 'Máximo ' + (maxOnSec / 60) + ' min';
+
+  if (!onInput.dataset.userEdited) onInput.value = (curOnSec / 60).toString();
+  if (!offInput.dataset.userEdited) offInput.value = (curOffSec / 60).toString();
+
+  if (data.error) {
+    setFormMessage(data.error, 'error');
+  } else if (formMessage.dataset.pendingSave === '1') {
+    setFormMessage('Cambios guardados.', 'ok');
+    formMessage.dataset.pendingSave = '0';
+  }
+}
+
+function handleNotification(event) {
+  const text = new TextDecoder().decode(event.target.value);
+  try {
+    applyStatus(JSON.parse(text));
+  } catch (e) { /* mensaje incompleto, se ignora */ }
+}
+
+function onDisconnected() {
+  connectBtn.textContent = 'Conectar con la torre';
+  connectBtn.classList.remove('connected');
+  connectBtn.disabled = false;
+  onInput.disabled = true;
+  offInput.disabled = true;
+  saveBtn.disabled = true;
+  pumpLabel.textContent = 'Sin conexión';
+  pumpLabel.className = 'pump-label state-off';
+  ring.className = 'ring off';
+  if (tickHandle) clearInterval(tickHandle);
+  setFormMessage('Se perdió la conexión con la torre.', 'error');
+}
+
+async function connect() {
+  if (!navigator.bluetooth) {
+    connNote.textContent = 'Este navegador no soporta Web Bluetooth. Usa Chrome o Edge.';
+    return;
+  }
+  connectBtn.disabled = true;
+  connectBtn.textContent = 'Buscando…';
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }]
+    });
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    statusChar = await service.getCharacteristic(STATUS_UUID);
+    configChar = await service.getCharacteristic(CONFIG_UUID);
+
+    await statusChar.startNotifications();
+    statusChar.addEventListener('characteristicvaluechanged', handleNotification);
+
+    const initial = await statusChar.readValue();
+    applyStatus(JSON.parse(new TextDecoder().decode(initial)));
+
+    connectBtn.textContent = 'Conectado';
+    connectBtn.classList.add('connected');
+    connectBtn.disabled = false;
+    onInput.disabled = false;
+    offInput.disabled = false;
+    saveBtn.disabled = false;
+    setFormMessage('', '');
+  } catch (e) {
+    connectBtn.textContent = 'Conectar con la torre';
+    connectBtn.disabled = false;
+    setFormMessage('No se pudo conectar: ' + e.message, 'error');
+  }
+}
+
+connectBtn.addEventListener('click', () => {
+  if (connectBtn.classList.contains('connected')) return;
+  connect();
+});
+
+onInput.addEventListener('input', () => { onInput.dataset.userEdited = '1'; });
+offInput.addEventListener('input', () => { offInput.dataset.userEdited = '1'; });
+
+configForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!configChar) return;
+
+  const onMin = parseFloat(onInput.value);
+  const offMin = parseFloat(offInput.value);
+
+  if (isNaN(onMin) || isNaN(offMin) || onMin <= 0 || offMin <= 0) {
+    setFormMessage('Ingresa tiempos válidos mayores a cero.', 'error');
+    return;
+  }
+  const onSecToSend = Math.round(onMin * 60);
+  const offSecToSend = Math.round(offMin * 60);
+
+  if (maxOnSec && onSecToSend > maxOnSec) {
+    setFormMessage('El tiempo encendido supera el máximo de ' + (maxOnSec / 60) + ' min permitido por la bomba.', 'error');
+    return;
+  }
+
+  try {
+    saveBtn.disabled = true;
+    setFormMessage('Guardando…', '');
+    formMessage.dataset.pendingSave = '1';
+    const payload = JSON.stringify({ onSec: onSecToSend, offSec: offSecToSend });
+    await configChar.writeValue(new TextEncoder().encode(payload));
+  } catch (err) {
+    setFormMessage('Error al enviar: ' + err.message, 'error');
+  } finally {
+    saveBtn.disabled = false;
+  }
+});
+</script>
+</Base>
+
+<style is:global>
+  /* Solo afecta a esta página: Astro incluye estos estilos únicamente en /control */
+  body {
+    background: var(--color-verde-950);
+    color: var(--color-crema);
+  }
+
+  .panel-control {
+    min-height: 100svh;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background:
+      radial-gradient(40rem 30rem at 100% 0%, rgb(36 92 34 / 0.45), transparent 70%),
+      var(--color-verde-950);
+  }
+
+  .panel-control .app {
+    width: 100%;
+    max-width: 30rem;
+    margin: 0 auto;
+    padding: 2.25rem 1.25rem 3rem;
+  }
+
+  .panel-control h1 {
+    font-size: 2.5rem;
+    font-weight: 600;
+    line-height: 1.05;
+    margin: 0.75rem 0 0.35rem;
+  }
+  .panel-control .subtitle {
+    color: rgb(250 237 221 / 0.65);
+    font-size: 0.95rem;
+    margin: 0 0 1.5rem;
+    max-width: 34ch;
+  }
+
+  /* --- Aviso de compatibilidad --- */
+  .panel-control .aviso-compat {
+    display: flex;
+    gap: 0.85rem;
+    padding: 1rem 1.1rem;
+    margin-bottom: 1rem;
+    border-radius: 1.25rem;
+    background: rgb(230 179 90 / 0.12);
+    color: var(--color-ambar);
+    box-shadow: inset 0 0 0 1px rgb(230 179 90 / 0.3);
+  }
+  .panel-control .aviso-compat[hidden] { display: none; }
+  .panel-control .aviso-compat strong { display: block; color: var(--color-crema); }
+  .panel-control .aviso-compat p { margin: 0.3rem 0 0; font-size: 0.85rem; color: rgb(250 237 221 / 0.75); }
+
+  /* --- Tarjetas --- */
+  .panel-control .status-card,
+  .panel-control .config-card {
+    background: var(--color-verde);
+    border-radius: 1.75rem;
+    box-shadow: inset 0 0 0 1px rgb(250 237 221 / 0.08), 0 20px 40px -24px rgb(0 0 0 / 0.6);
+    padding: 1.5rem 1.35rem;
+    margin-bottom: 1rem;
+  }
+
+  .panel-control .indicator-row {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    padding-left: 0.3rem; /* espacio para el pulso del anillo */
+    margin-bottom: 1.25rem;
+  }
+  .panel-control .ring {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgb(250 237 221 / 0.35);
+    position: relative;
+    flex-shrink: 0;
+  }
+  .panel-control .ring::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border-radius: 50%;
+    border: 1.5px solid transparent;
+  }
+  .panel-control .ring.on { background: var(--color-hoja); }
+  .panel-control .ring.on::after {
+    border-color: var(--color-hoja);
+    animation: pulso 1.8s ease-out infinite;
+  }
+  @keyframes pulso {
+    0%   { transform: scale(1);   opacity: 0.7; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+  .panel-control .pump-label { font-family: var(--font-display); font-size: 1.35rem; font-weight: 500; }
+  .panel-control .pump-label .state-word { font-weight: 700; }
+  .panel-control .pump-label.state-on .state-word { color: var(--color-hoja); }
+  .panel-control .pump-label.state-off .state-word { color: rgb(250 237 221 / 0.6); }
+
+  /* --- Barra de ciclo --- */
+  .panel-control .cycle-bar {
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    display: flex;
+    background: rgb(250 237 221 / 0.08);
+    margin-bottom: 0.4rem;
+  }
+  .panel-control .cycle-bar .seg-on { background: rgb(124 191 85 / 0.45); height: 100%; position: relative; }
+  .panel-control .cycle-bar .seg-off { background: rgb(250 237 221 / 0.08); height: 100%; }
+  .panel-control .cycle-marker {
+    position: absolute;
+    top: -3px;
+    width: 4px;
+    height: 16px;
+    background: var(--color-agua);
+    border-radius: 2px;
+    box-shadow: 0 0 10px var(--color-agua);
+    transition: left 0.9s linear;
+  }
+  .panel-control .cycle-caption {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: rgb(250 237 221 / 0.68);
+    margin-bottom: 1.25rem;
+  }
+
+  .panel-control .readouts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+  }
+  .panel-control .readout {
+    background: rgb(11 36 11 / 0.55);
+    border-radius: 1rem;
+    padding: 0.7rem 0.5rem;
+    text-align: center;
+  }
+  .panel-control .readout-label {
+    display: block;
+    font-size: 0.68rem;
+    color: rgb(250 237 221 / 0.68);
+    margin-bottom: 0.2rem;
+  }
+  .panel-control .readout-value {
+    font-family: var(--font-mono);
+    font-size: 1.15rem;
+    font-weight: 500;
+  }
+
+  /* --- Botón conectar --- */
+  .panel-control .connect-btn {
+    width: 100%;
+    padding: 1rem;
+    border: none;
+    border-radius: 999px;
+    background: var(--color-hoja);
+    color: var(--color-verde-950);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin: 0.5rem 0 0.9rem;
+    box-shadow: 0 12px 30px -12px rgb(124 191 85 / 0.6);
+    transition: transform 0.2s, filter 0.2s;
+  }
+  .panel-control .connect-btn:hover { filter: brightness(1.05); }
+  .panel-control .connect-btn:active { transform: translateY(1px) scale(0.99); }
+  .panel-control .connect-btn.connected {
+    background: transparent;
+    color: rgb(250 237 221 / 0.75);
+    box-shadow: inset 0 0 0 1.5px rgb(124 191 85 / 0.5);
+  }
+  .panel-control .connect-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .panel-control .conn-note {
+    font-size: 0.78rem;
+    color: rgb(250 237 221 / 0.68);
+    text-align: center;
+    margin: 0 0 1.5rem;
+  }
+
+  /* --- Configuración --- */
+  .panel-control .config-card h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.3rem;
+  }
+  .panel-control .config-card .hint {
+    font-size: 0.8rem;
+    color: var(--color-ambar);
+    margin: 0 0 1.1rem;
+  }
+  .panel-control .field { margin-bottom: 1rem; }
+  .panel-control .field label {
+    display: block;
+    font-size: 0.82rem;
+    color: rgb(250 237 221 / 0.7);
+    margin-bottom: 0.4rem;
+  }
+  .panel-control .field input {
+    width: 100%;
+    background: rgb(11 36 11 / 0.55);
+    border: none;
+    box-shadow: inset 0 0 0 1px rgb(250 237 221 / 0.12);
+    border-radius: 0.9rem;
+    padding: 0.75rem 0.85rem;
+    color: var(--color-crema);
+    font-family: var(--font-mono);
+    font-size: 1rem;
+  }
+  .panel-control .field input:disabled { opacity: 0.55; }
+  .panel-control .field input:focus-visible {
+    outline: 2px solid var(--color-hoja);
+    outline-offset: 1px;
+  }
+  .panel-control .field .field-note {
+    font-size: 0.72rem;
+    color: rgb(250 237 221 / 0.68);
+    margin-top: 0.3rem;
+  }
+  .panel-control .save-btn {
+    width: 100%;
+    padding: 0.9rem;
+    border: none;
+    border-radius: 999px;
+    background: var(--color-crema);
+    color: var(--color-verde);
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .panel-control .save-btn:active { transform: scale(0.99); }
+  .panel-control .save-btn:disabled { opacity: 0.4; cursor: default; }
+
+  .panel-control .form-message {
+    margin: 0.8rem 0 0;
+    font-size: 0.85rem;
+    min-height: 1.1em;
+  }
+  .panel-control .form-message.error { color: #f0907c; }
+  .panel-control .form-message.ok { color: var(--color-hoja); }
+
+  .panel-control .ayuda {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: center;
+    text-align: center;
+    font-size: 0.78rem;
+    color: rgb(250 237 221 / 0.6);
+    margin: 1.5rem 0 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel-control .ring.on::after { animation: none; }
+    .panel-control .cycle-marker { transition: none; }
+  }
+</style>

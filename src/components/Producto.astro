@@ -1,0 +1,105 @@
+---
+// Nuestra torre: modelo 3D interactivo (model-viewer) sobre un escenario verde.
+// El modelo y la librería solo se descargan cuando la sección se acerca a la pantalla.
+// Modelo: public/models/htower.glb (textura reducida a 1024 px WebP → 182 KB).
+import { Icon } from 'astro-icon/components';
+import Isotipo from './Isotipo.astro';
+---
+
+<section id="producto" class="seccion overflow-x-clip bg-crema-200/60">
+  <div class="contenedor grid items-center gap-12 lg:grid-cols-12 lg:gap-16">
+    <!-- Texto -->
+    <div data-revelar class="lg:col-span-5">
+      <span class="eyebrow text-verde-500">
+        <Icon name="ph:cube" class="size-4" /> Producto
+      </span>
+      <h2 class="mt-4 text-4xl leading-[1.05] font-semibold sm:text-6xl">
+        Nuestra torre <em class="font-normal text-verde-500">aeropónica.</em>
+      </h2>
+      <p class="mt-6 max-w-md text-lg leading-relaxed text-verde/75">
+        Una huerta completa en muy poco espacio, con riego automatizado y control desde tu celular.
+        Lista para cualquier rincón de tu casa.
+      </p>
+      <div class="mt-9 flex flex-wrap gap-3">
+        <a href="#contacto" class="btn btn-primario">
+          Reservar mi torre <Icon name="ph:arrow-right" class="size-4" />
+        </a>
+        <a href="#como-funciona" class="btn btn-contorno">Cómo funciona</a>
+      </div>
+    </div>
+
+    <!-- Escenario 3D -->
+    <div data-revelar style="--retraso: 120ms" class="lg:col-span-7">
+      <div
+        id="escenario-3d"
+        class="relative isolate aspect-[4/5] overflow-hidden rounded-[3rem] bg-verde sm:aspect-[5/5] lg:aspect-[6/6.2]"
+      >
+        <!-- Luz de fondo y piso -->
+        <div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
+          <div class="absolute top-1/2 left-1/2 size-[80%] -translate-1/2 rounded-full bg-verde-500/40 blur-3xl"></div>
+          <div class="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-verde-950/50 to-transparent"></div>
+        </div>
+
+        <model-viewer
+          src="/models/htower.glb"
+          alt="Modelo 3D de la torre GROWA. Arrastra para girarla."
+          camera-controls
+          disable-zoom
+          disable-pan
+          auto-rotate
+          auto-rotate-delay="0"
+          rotation-per-second="18deg"
+          interaction-prompt="none"
+          touch-action="pan-y"
+          camera-orbit="35deg 75deg 130%"
+          max-camera-orbit="auto auto 130%"
+          shadow-intensity="1.1"
+          shadow-softness="0.8"
+          exposure="1.05"
+          tone-mapping="neutral"
+          loading="lazy"
+          class="size-full"
+        >
+          <!-- Mientras carga -->
+          <div slot="poster" class="grid size-full place-items-center">
+            <div class="flex flex-col items-center gap-3 text-crema/70">
+              <Isotipo class="h-14 w-auto animate-pulse" label="" />
+              <span class="text-sm">Cargando modelo 3D…</span>
+            </div>
+          </div>
+          <div slot="progress-bar"></div>
+        </model-viewer>
+
+        <span
+          class="pointer-events-none absolute bottom-5 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 rounded-pill bg-crema/10 px-4 py-2 text-xs font-medium text-crema/80 ring-1 ring-crema/15 backdrop-blur-md"
+        >
+          <Icon name="ph:hand-grabbing" class="size-4" /> Arrastra para girarla
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  model-viewer {
+    --poster-color: transparent;
+    display: block;
+    outline: none;
+  }
+</style>
+
+<script>
+  // Carga diferida: la librería (~three.js) solo se pide cuando el escenario está cerca
+  const escenario = document.getElementById('escenario-3d');
+  if (escenario) {
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (!e.isIntersecting) return;
+        io.disconnect();
+        import('@google/model-viewer');
+      },
+      { rootMargin: '400px 0px' },
+    );
+    io.observe(escenario);
+  }
+</script>

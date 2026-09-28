@@ -1,0 +1,27 @@
+---
+// Marca horizontal: isotipo + letras "GROWA" (trazos originales del logo).
+// Color = currentColor. Tamaño con la altura: class="h-9".
+import Isotipo from './Isotipo.astro';
+import letrasRaw from '../assets/brand/growa-letras.svg?raw';
+
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+const [, viewBox] = letrasRaw.match(/viewBox="([^"]+)"/)!;
+const letras = letrasRaw.replace(/^[\s\S]*?<svg[^>]*>|<\/svg>\s*$/g, '');
+---
+
+<span class:list={['inline-flex items-end gap-1.5', className]}>
+  <Isotipo class="h-full w-auto" label="" />
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox={viewBox}
+    fill="currentColor"
+    class="h-[58%] w-auto -translate-y-[6%]"
+    aria-hidden="true"
+    set:html={letras}
+  />
+  <span class="sr-only">GROWA</span>
+</span>

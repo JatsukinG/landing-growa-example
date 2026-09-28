@@ -1,0 +1,110 @@
+---
+// Metaetiquetas SEO + Open Graph + Twitter, y datos estructurados (JSON-LD).
+// Lo usa Base.astro; cada página puede sobrescribir título, descripción e imagen.
+import { sitio } from '../data/sitio';
+import { contacto, redes } from '../data/contacto';
+
+interface Props {
+  title: string;
+  description: string;
+  noindex: boolean;
+  /** ruta de la imagen para compartir (en /public), 1200×630 */
+  image?: string;
+  imageAlt?: string;
+  /** datos estructurados de la organización/producto (solo en la home) */
+  schema?: boolean;
+}
+
+const { title, description, noindex, image = sitio.imagen, imageAlt = sitio.imagenAlt, schema = false } = Astro.props;
+
+const site = Astro.site!;
+const canonical = new URL(Astro.url.pathname, site).href;
+const imagenAbs = new URL(image, site).href;
+const logoAbs = new URL('/icon-512.png', site).href;
+
+// --- JSON-LD. Los datos de contacto solo se incluyen con `contacto.datosReales = true` ---
+const reales = contacto.datosReales;
+
+const organizacion = {
+  '@type': 'Organization',
+  '@id': new URL('/#organizacion', site).href,
+  name: sitio.nombre,
+  url: site.href,
+  logo: logoAbs,
+  description: sitio.descripcion,
+  ...(reales && {
+    sameAs: redes.map((r) => r.url),
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer service',
+      availableLanguage: 'es',
+      ...(contacto.email && { email: contacto.email }),
+      ...(contacto.whatsapp && { telephone: `+${contacto.whatsapp}` }),
+    },
+    ...(contacto.ciudad && { address: { '@type': 'PostalAddress', addressLocality: contacto.ciudad } }),
+  }),
+};
+
+const grafo = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    organizacion,
+    {
+      '@type': 'WebSite',
+      '@id': new URL('/#sitio', site).href,
+      url: site.href,
+      name: sitio.nombre,
+      inLanguage: 'es',
+      publisher: { '@id': organizacion['@id'] },
+    },
+    {
+      '@type': 'Product',
+      name: 'Torre vertical aeropónica GROWA',
+      description:
+        'Torre de cultivo vertical aeropónico con riego automatizado y control por Bluetooth desde el celular.',
+      image: imagenAbs,
+      brand: { '@type': 'Brand', name: sitio.nombre },
+      manufacturer: { '@id': organizacion['@id'] },
+      // TODO: agregar `offers` (precio, moneda, disponibilidad) cuando haya precio público.
+    },
+  ],
+};
+---
+
+<title>{title}</title>
+<meta name="description" content={description} />
+{
+  noindex ? (
+    <meta name="robots" content="noindex, nofollow" />
+  ) : (
+    <>
+      <meta name="robots" content="index, follow, max-image-preview:large" />
+      <link rel="canonical" href={canonical} />
+      <link rel="sitemap" href="/sitemap-index.xml" />
+    </>
+  )
+}
+
+<!-- Open Graph (WhatsApp, Facebook, LinkedIn, Telegram…) -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content={sitio.nombre} />
+<meta property="og:locale" content={sitio.locale} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:image" content={imagenAbs} />
+<meta property="og:image:secure_url" content={imagenAbs} />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content={imageAlt} />
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={imagenAbs} />
+<meta name="twitter:image:alt" content={imageAlt} />
+{sitio.twitter && <meta name="twitter:site" content={`@${sitio.twitter}`} />}
+
+{schema && <script type="application/ld+json" set:html={JSON.stringify(grafo)} />}

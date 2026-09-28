@@ -1,0 +1,28 @@
+---
+import Base from '../layouts/Base.astro';
+import Navbar from '../components/Navbar.astro';
+import Hero from '../components/Hero.astro';
+import QueEs from '../components/QueEs.astro';
+import Ola from '../components/Ola.astro';
+import ComoFunciona from '../components/ComoFunciona.astro';
+import Ventajas from '../components/Ventajas.astro';
+import Producto from '../components/Producto.astro';
+import Contacto from '../components/Contacto.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Base schema>
+  <Navbar />
+  <main id="contenido">
+    <Hero />
+    <QueEs />
+    <Ola arriba="crema" abajo="verde" />
+    <ComoFunciona />
+    <Ola arriba="verde" abajo="crema" invertir />
+    <Ventajas />
+    <Producto />
+    <Contacto />
+  </main>
+  <Ola arriba="crema" abajo="verde-950" />
+  <Footer />
+</Base>
