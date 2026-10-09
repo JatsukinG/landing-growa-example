@@ -59,7 +59,7 @@ El plan por sesiones está en `PLAN.md`. Al empezar una sesión, leerlo y marcar
 - Logo animado: `<LogoAnimado class="w-96 text-crema" />` · props `conTexto`, `bucle`, `inicio="visible|carga"`.
 - Fotos en `src/assets/fotos/` → usar `<Image />` de `astro:assets`. Modelo 3D en `public/models/htower.glb`.
 - Datos de contacto y redes: SOLO en `src/data/contacto.ts` (marcadores con TODO). Menú: `src/data/navegacion.ts`.
-- `/control` (`src/pages/control.astro`): el `<script is:inline>` BLE es copia exacta del original; no cambiar IDs/clases que usa.
+- `/control` (`src/pages/control.astro`): protocolo BLE en `../CONTEXTO_TORRE_HIDROPONICA.md` (campos `state`, `water`, `hourUsedSec`, `hourMaxSec`; regla `offSec >= 2 × onSec`). El estado visual va en `data-state` de `#statusCard`; los IDs que usa el `<script is:inline>` deben conservarse. Si faltan campos nuevos (firmware viejo) se derivan u ocultan.
 - SEO/OG: configuración en `src/data/sitio.ts`, etiquetas + JSON-LD en `src/components/Seo.astro` (props de `Base`: `title`, `description`, `noindex`, `image`, `imageAlt`, `schema`). El JSON-LD solo incluye contacto/redes si `contacto.datosReales = true`.
 - `site` en `astro.config.mjs` es un marcador hasta tener dominio (afecta canonical, og:image, sitemap, robots).
 - Aparición al hacer scroll: atributo `data-revelar` (opcional `style="--retraso: 120ms"`), script en `Base.astro`.

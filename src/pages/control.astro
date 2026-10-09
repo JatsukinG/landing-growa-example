@@ -1,9 +1,9 @@
 ---
 // Panel de control de la torre por Bluetooth (Web Bluetooth → ESP32-C3).
-// Migrado de ../index.html. La lógica BLE (UUIDs, formato JSON, flujo de conexión)
-// se copió SIN CAMBIOS en el <script is:inline> del final. Los IDs y clases que usa
-// ese script (ring, pump-label, cycle-marker, connect-btn, form-message…) deben
-// conservarse si se cambia el diseño.
+// Protocolo descrito en ../CONTEXTO_TORRE_HIDROPONICA.md (UUIDs y formato JSON).
+// El firmware nuevo agrega `water`, `state`, `hourUsedSec` y `hourMaxSec`; si no
+// llegan (firmware viejo) el panel los deriva u oculta esas filas.
+// Los IDs que usa el <script is:inline> del final deben conservarse si cambia el diseño.
 import { Icon } from 'astro-icon/components';
 import Base from '../layouts/Base.astro';
 import Marca from '../components/Marca.astro';
@@ -28,7 +28,7 @@ import Marca from '../components/Marca.astro';
     <main id="contenido" class="app">
       <span class="eyebrow text-hoja"><Icon name="ph:drop" class="size-4" /> Panel de riego</span>
       <h1>Tu torre</h1>
-      <p class="subtitle">Control de la bomba de riego por Bluetooth de bajo consumo.</p>
+      <p class="subtitle">Mira cómo va el riego y ajusta los tiempos desde aquí.</p>
 
       <!-- Aviso de compatibilidad (se muestra al cargar si no hay Web Bluetooth) -->
       <div id="avisoCompat" class="aviso-compat" role="alert" hidden>
@@ -42,69 +42,105 @@ import Marca from '../components/Marca.astro';
         </div>
       </div>
 
-      <section class="status-card" aria-live="polite">
-        <div class="indicator-row">
-          <div class="ring off" id="ring"></div>
-          <div class="pump-label state-off" id="pumpLabel">Sin conexión</div>
+      <!-- Conexión: botón grande sin conexión, barra discreta cuando ya está conectada -->
+      <div id="connectBlock">
+        <button class="connect-btn" id="connectBtn" type="button">
+          <Icon name="ph:bluetooth-connected" class="size-5" />
+          <span id="connectText">Conectar con la torre</span>
+        </button>
+        <p class="conn-note" id="connNote">Activa el Bluetooth y acércate a la torre.</p>
+      </div>
+      <div class="conn-bar" id="connBar" hidden>
+        <span class="conn-dot" aria-hidden="true"></span>
+        <span>Conectado a <b id="deviceName">la torre</b></span>
+        <button type="button" class="conn-off" id="disconnectBtn">Desconectar</button>
+      </div>
+
+      <!-- Estado de la torre -->
+      <section class="status-card" id="statusCard" data-state="idle" aria-live="polite">
+        <div class="estado">
+          <div class="estado-icono" aria-hidden="true">
+            <Icon name="ph:bluetooth-slash" class="ico ico-idle" />
+            <Icon name="ph:drop-fill" class="ico ico-on" />
+            <Icon name="ph:hourglass-medium" class="ico ico-off" />
+            <Icon name="ph:drop-slash" class="ico ico-nowater" />
+            <Icon name="ph:shield-check" class="ico ico-limit" />
+          </div>
+          <div class="min-w-0">
+            <p class="estado-titulo" id="stateTitle">Sin conexión</p>
+            <p class="estado-detalle" id="stateDetail">Conecta la torre para ver cómo va el riego.</p>
+          </div>
         </div>
 
-        <div class="cycle-bar" id="cycleBar">
-          <div class="seg-on" id="segOn" style="width:33%">
-            <div class="cycle-marker" id="cycleMarker" style="left:0%"></div>
+        <!-- Progreso de la fase actual (solo en ON / OFF) -->
+        <div class="fase" id="phaseBlock" hidden>
+          <div class="fase-fila">
+            <span id="phaseLabel">Próximo riego en</span>
+            <span class="mono fase-tiempo" id="remainingVal">—:—</span>
           </div>
-          <div class="seg-off" id="segOff" style="width:67%"></div>
-        </div>
-        <div class="cycle-caption">
-          <span>Encendido</span>
-          <span>Apagado</span>
+          <div class="barra" role="presentation"><div class="barra-relleno" id="phaseFill"></div></div>
         </div>
 
-        <div class="readouts">
-          <div class="readout">
-            <span class="readout-label">Restante</span>
-            <span class="readout-value mono" id="remainingVal">—:—</span>
+        <dl class="datos" id="dataList" hidden>
+          <div class="dato" id="waterRow" hidden>
+            <dt>Agua en el tanque</dt>
+            <dd><span class="chip" id="waterChip">—</span></dd>
           </div>
-          <div class="readout">
-            <span class="readout-label">Encendido</span>
-            <span class="readout-value mono" id="onVal">—:—</span>
+          <div class="dato" id="hourRow" hidden>
+            <dt>Uso de la bomba en la última hora</dt>
+            <dd class="mono" id="hourVal">—</dd>
+            <dd class="dato-barra">
+              <div class="barra barra-fina"><div class="barra-relleno" id="hourFill"></div></div>
+            </dd>
           </div>
-          <div class="readout">
-            <span class="readout-label">Apagado</span>
-            <span class="readout-value mono" id="offVal">—:—</span>
+          <div class="dato">
+            <dt>Ciclo actual</dt>
+            <dd class="mono" id="cycleVal">—</dd>
           </div>
-        </div>
+        </dl>
       </section>
 
-      <button class="connect-btn" id="connectBtn">Conectar con la torre</button>
-      <p class="conn-note" id="connNote">Requiere Chrome o Edge con Bluetooth activado. No funciona en Safari/iOS.</p>
+      <!-- Configuración -->
+      <section class="config-card" id="configCard">
+        <h2>Ajustar el riego</h2>
+        <p class="hint" id="configHint">Conéctate a la torre para cambiar los tiempos.</p>
 
-      <section class="config-card">
-        <h2>Configurar ciclos de riego</h2>
-        <p class="hint" id="maxHint">Conéctate para ver el máximo permitido por el fabricante de la bomba.</p>
+        <form id="configForm" novalidate>
+          <div class="campos">
+            <div class="field">
+              <label for="onInput">Riego <span>(bomba encendida)</span></label>
+              <div class="input-unidad">
+                <input type="number" id="onInput" inputmode="decimal" step="any" min="0" required disabled aria-describedby="onNote" />
+                <span>min</span>
+              </div>
+              <p class="field-note" id="onNote">Entre 5 s y 15 min.</p>
+            </div>
+            <div class="field">
+              <label for="offInput">Descanso <span>(bomba apagada)</span></label>
+              <div class="input-unidad">
+                <input type="number" id="offInput" inputmode="decimal" step="any" min="0" required disabled aria-describedby="offNote" />
+                <span>min</span>
+              </div>
+              <p class="field-note" id="offNote">Al menos el doble del riego.</p>
+            </div>
+          </div>
+          <button type="button" class="fix-btn" id="fixBtn" hidden></button>
 
-        <form id="configForm">
-          <div class="field">
-            <label for="onInput">Tiempo encendido (minutos)</label>
-            <input type="number" id="onInput" step="any" min="0" required disabled />
-            <div class="field-note" id="onNote"></div>
-          </div>
-          <div class="field">
-            <label for="offInput">Tiempo apagado (minutos)</label>
-            <input type="number" id="offInput" step="any" min="0" required disabled />
-          </div>
+          <p class="resumen" id="summary" hidden></p>
+
           <button type="submit" class="save-btn" id="saveBtn" disabled>Guardar cambios</button>
         </form>
-        <p class="form-message" id="formMessage"></p>
+        <p class="form-message" id="formMessage" role="status"></p>
       </section>
 
       <p class="ayuda">
         <Icon name="ph:lightbulb" class="size-4 shrink-0" />
-        ¿No aparece tu torre? Activa el Bluetooth del dispositivo y acércate a ella.
+        La bomba trabaja como máximo 20 min por hora para cuidar su vida útil.
       </p>
     </main>
   </div>
 
-  <!-- Aviso de compatibilidad al cargar (antes solo se avisaba al tocar "Conectar") -->
+  <!-- Aviso de compatibilidad al cargar -->
   <script is:inline>
     if (!navigator.bluetooth) {
       document.getElementById('avisoCompat').hidden = false;
@@ -115,34 +151,57 @@ import Marca from '../components/Marca.astro';
     }
   </script>
 
-  <!-- Lógica BLE original (copiada sin cambios de ../index.html) -->
+  <!-- Lógica BLE -->
   <script is:inline>
+const DEVICE_NAME  = 'TorreHidroponica';
 const SERVICE_UUID = '12345678-1234-5678-1234-56789abcdef0';
 const STATUS_UUID  = '12345678-1234-5678-1234-56789abcdef1';
 const CONFIG_UUID  = '12345678-1234-5678-1234-56789abcdef2';
 
-const connectBtn   = document.getElementById('connectBtn');
-const connNote     = document.getElementById('connNote');
-const ring         = document.getElementById('ring');
-const pumpLabel    = document.getElementById('pumpLabel');
-const segOn        = document.getElementById('segOn');
-const segOff       = document.getElementById('segOff');
-const cycleMarker  = document.getElementById('cycleMarker');
-const remainingVal = document.getElementById('remainingVal');
-const onVal        = document.getElementById('onVal');
-const offVal       = document.getElementById('offVal');
-const maxHint      = document.getElementById('maxHint');
-const onInput      = document.getElementById('onInput');
-const offInput     = document.getElementById('offInput');
-const onNote       = document.getElementById('onNote');
-const saveBtn      = document.getElementById('saveBtn');
-const configForm   = document.getElementById('configForm');
-const formMessage  = document.getElementById('formMessage');
+const MIN_SEC = 5;            // mínimo que acepta el firmware para onSec y offSec
+const SAVE_TIMEOUT_MS = 6000; // si la torre no confirma en este tiempo, se avisa
+
+const $ = (id) => document.getElementById(id);
+const connectBlock  = $('connectBlock');
+const connectBtn    = $('connectBtn');
+const connectText   = $('connectText');
+const connNote      = $('connNote');
+const connBar       = $('connBar');
+const deviceName    = $('deviceName');
+const disconnectBtn = $('disconnectBtn');
+const statusCard    = $('statusCard');
+const stateTitle    = $('stateTitle');
+const stateDetail   = $('stateDetail');
+const phaseBlock    = $('phaseBlock');
+const phaseLabel    = $('phaseLabel');
+const remainingVal  = $('remainingVal');
+const phaseFill     = $('phaseFill');
+const dataList      = $('dataList');
+const waterRow      = $('waterRow');
+const waterChip     = $('waterChip');
+const hourRow       = $('hourRow');
+const hourVal       = $('hourVal');
+const hourFill      = $('hourFill');
+const cycleVal      = $('cycleVal');
+const configHint    = $('configHint');
+const configForm    = $('configForm');
+const onInput       = $('onInput');
+const offInput      = $('offInput');
+const onNote        = $('onNote');
+const offNote       = $('offNote');
+const fixBtn        = $('fixBtn');
+const summary       = $('summary');
+const saveBtn       = $('saveBtn');
+const formMessage   = $('formMessage');
 
 let device = null, statusChar = null, configChar = null;
-let maxOnSec = null, curOnSec = null, curOffSec = null, curPumpOn = null;
-let localRemaining = null;
+let status = null;          // último estado recibido (normalizado)
+let localRemaining = 0;     // cuenta regresiva local entre notificaciones
 let tickHandle = null;
+let pendingSave = null;     // { onSec, offSec, timer } mientras se espera confirmación
+let manualDisconnect = false;
+
+// ---------- Formato ----------
 
 function fmtMinSec(totalSec) {
   totalSec = Math.max(0, Math.round(totalSec));
@@ -151,77 +210,142 @@ function fmtMinSec(totalSec) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
+// Minutos legibles en español: 2,5 · 15 · 0,08
+function fmtMinutes(sec) {
+  return (sec / 60).toLocaleString('es', { maximumFractionDigits: 2 });
+}
+
 function setFormMessage(text, kind) {
   formMessage.textContent = text || '';
   formMessage.className = 'form-message' + (kind ? ' ' + kind : '');
 }
 
-function renderCycleBar() {
-  if (!curOnSec || !curOffSec) return;
-  const total = curOnSec + curOffSec;
-  const onPct = (curOnSec / total) * 100;
-  segOn.style.width = onPct + '%';
-  segOff.style.width = (100 - onPct) + '%';
-
-  const phaseTotal = curPumpOn ? curOnSec : curOffSec;
-  const elapsed = phaseTotal - localRemaining;
-  let markerPct;
-  if (curPumpOn) {
-    markerPct = (Math.max(0, elapsed) / curOnSec) * onPct;
+// Barra de progreso: sin animación cuando retrocede (cambio de fase)
+function setFill(el, ratio) {
+  const pct = Math.min(100, Math.max(0, ratio * 100));
+  const prev = parseFloat(el.dataset.pct || '0');
+  if (pct < prev) {
+    el.style.transition = 'none';
+    el.style.width = pct + '%';
+    void el.offsetWidth;
+    el.style.transition = '';
   } else {
-    markerPct = onPct + (Math.max(0, elapsed) / curOffSec) * (100 - onPct);
+    el.style.width = pct + '%';
   }
-  cycleMarker.style.left = Math.min(100, Math.max(0, markerPct)) + '%';
+  el.dataset.pct = String(pct);
 }
 
-function renderPumpState() {
-  ring.className = 'ring ' + (curPumpOn ? 'on' : 'off');
-  pumpLabel.className = 'pump-label ' + (curPumpOn ? 'state-on' : 'state-off');
-  pumpLabel.innerHTML = curPumpOn
-    ? 'Bomba <span class="state-word">encendida</span>'
-    : 'Bomba <span class="state-word">apagada</span>';
+// ---------- Estado ----------
+
+// Compatibilidad con firmware viejo: si falta `state` se deriva de `pump`;
+// los demás campos nuevos quedan en null y sus filas se ocultan.
+function normalize(data) {
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+  const pumpOn = data.pump === 1;
+  const known = ['ON', 'OFF', 'NO_WATER', 'HOUR_LIMIT'];
+  return {
+    pumpOn,
+    state: known.includes(data.state) ? data.state : (pumpOn ? 'ON' : 'OFF'),
+    onSec: num(data.onSec),
+    offSec: num(data.offSec),
+    maxOnSec: num(data.maxOnSec),
+    remainingSec: num(data.remainingSec) ?? 0,
+    water: data.water === 0 || data.water === 1 ? data.water : null,
+    hourUsedSec: num(data.hourUsedSec),
+    hourMaxSec: num(data.hourMaxSec),
+    error: typeof data.error === 'string' && data.error ? data.error : null,
+  };
 }
 
-function renderReadouts() {
+function stateTexts(s) {
+  switch (s.state) {
+    case 'ON':
+      return ['Regando', 'La bomba está encendida.'];
+    case 'OFF':
+      return ['En espera', 'La bomba descansa hasta el próximo riego.'];
+    case 'NO_WATER':
+      return s.water === 1
+        ? ['Sin agua en el tanque', 'Agua detectada. El riego se reanuda en unos segundos.']
+        : ['Sin agua en el tanque', 'Riego detenido. Rellena el tanque y el riego se reanudará solo.'];
+    case 'HOUR_LIMIT': {
+      const max = s.hourMaxSec ? fmtMinutes(s.hourMaxSec) + ' min' : 'su límite';
+      return ['Pausa de protección', 'La bomba ya trabajó ' + max + ' en la última hora. Descansa y retoma sola.'];
+    }
+  }
+}
+
+function phaseTotal() {
+  if (!status) return 0;
+  return (status.state === 'ON' ? status.onSec : status.offSec) || 0;
+}
+
+function renderPhase() {
+  const total = phaseTotal();
+  const active = status && (status.state === 'ON' || status.state === 'OFF') && total > 0;
+  phaseBlock.hidden = !active;
+  if (!active) return;
+  phaseLabel.textContent = status.state === 'ON' ? 'Se apaga en' : 'Próximo riego en';
   remainingVal.textContent = fmtMinSec(localRemaining);
-  onVal.textContent = fmtMinSec(curOnSec);
-  offVal.textContent = fmtMinSec(curOffSec);
+  setFill(phaseFill, 1 - Math.min(localRemaining, total) / total);
+}
+
+function renderStatus() {
+  const s = status;
+  statusCard.dataset.state = s.state;
+  const [title, detail] = stateTexts(s);
+  stateTitle.textContent = title;
+  stateDetail.textContent = detail;
+
+  renderPhase();
+  dataList.hidden = false;
+
+  waterRow.hidden = s.water === null;
+  if (s.water !== null) {
+    waterChip.textContent = s.water ? 'Con agua' : 'Sin agua';
+    waterChip.className = 'chip ' + (s.water ? 'chip-ok' : 'chip-alerta');
+  }
+
+  const hasHour = s.hourUsedSec !== null && s.hourMaxSec > 0;
+  hourRow.hidden = !hasHour;
+  if (hasHour) {
+    hourVal.textContent = fmtMinutes(s.hourUsedSec) + ' de ' + fmtMinutes(s.hourMaxSec) + ' min';
+    const ratio = s.hourUsedSec / s.hourMaxSec;
+    setFill(hourFill, ratio);
+    hourFill.classList.toggle('lleno', ratio >= 0.9 || s.state === 'HOUR_LIMIT');
+  }
+
+  cycleVal.textContent = s.onSec !== null && s.offSec !== null
+    ? 'riega ' + fmtMinSec(s.onSec) + ' · descansa ' + fmtMinSec(s.offSec)
+    : '—';
 }
 
 function restartTicker() {
   if (tickHandle) clearInterval(tickHandle);
   tickHandle = setInterval(() => {
     if (localRemaining > 0) localRemaining -= 1;
-    renderReadouts();
-    renderCycleBar();
+    renderPhase();
   }, 1000);
 }
 
-function applyStatus(data) {
-  maxOnSec = data.maxOnSec;
-  curOnSec = data.onSec;
-  curOffSec = data.offSec;
-  curPumpOn = data.pump === 1;
-  localRemaining = data.remainingSec;
-
-  renderPumpState();
-  renderReadouts();
-  renderCycleBar();
+function applyStatus(raw) {
+  status = normalize(raw);
+  localRemaining = status.remainingSec;
+  renderStatus();
   restartTicker();
 
-  maxHint.textContent = 'Máximo permitido: ' + fmtMinSec(maxOnSec) + ' min — límite indicado por el fabricante de la bomba.';
-  onInput.max = (maxOnSec / 60).toString();
-  onNote.textContent = 'Máximo ' + (maxOnSec / 60) + ' min';
+  if (!onInput.dataset.userEdited && status.onSec !== null) onInput.value = String(status.onSec / 60);
+  if (!offInput.dataset.userEdited && status.offSec !== null) offInput.value = String(status.offSec / 60);
 
-  if (!onInput.dataset.userEdited) onInput.value = (curOnSec / 60).toString();
-  if (!offInput.dataset.userEdited) offInput.value = (curOffSec / 60).toString();
-
-  if (data.error) {
-    setFormMessage(data.error, 'error');
-  } else if (formMessage.dataset.pendingSave === '1') {
-    setFormMessage('Cambios guardados.', 'ok');
-    formMessage.dataset.pendingSave = '0';
+  if (status.error) {
+    clearPending();
+    setFormMessage('La torre rechazó el cambio: ' + status.error, 'error');
+  } else if (pendingSave && status.onSec === pendingSave.onSec && status.offSec === pendingSave.offSec) {
+    clearPending();
+    delete onInput.dataset.userEdited;
+    delete offInput.dataset.userEdited;
+    setFormMessage('Cambios guardados en la torre.', 'ok');
   }
+  updateForm();
 }
 
 function handleNotification(event) {
@@ -231,18 +355,158 @@ function handleNotification(event) {
   } catch (e) { /* mensaje incompleto, se ignora */ }
 }
 
+// ---------- Formulario ----------
+
+function validate() {
+  const r = { onSec: null, offSec: null, onErr: '', offErr: '', fixOff: null };
+  const maxOn = status && status.maxOnSec;
+  const onMin = parseFloat(onInput.value);
+  const offMin = parseFloat(offInput.value);
+
+  if (!(onMin > 0)) {
+    r.onErr = 'Escribe cuántos minutos riega.';
+  } else {
+    r.onSec = Math.round(onMin * 60);
+    if (r.onSec < MIN_SEC) r.onErr = 'Mínimo 5 segundos (0,1 min).';
+    else if (maxOn && r.onSec > maxOn) r.onErr = 'Máximo ' + fmtMinutes(maxOn) + ' min: es el límite de la bomba.';
+  }
+
+  if (!(offMin > 0)) {
+    r.offErr = 'Escribe cuántos minutos descansa.';
+  } else {
+    r.offSec = Math.round(offMin * 60);
+    if (r.offSec < MIN_SEC) r.offErr = 'Mínimo 5 segundos (0,1 min).';
+    else if (!r.onErr && r.offSec < 2 * r.onSec) {
+      r.offErr = 'Debe ser al menos el doble del riego: ' + fmtMinutes(2 * r.onSec) + ' min o más.';
+      r.fixOff = 2 * r.onSec;
+    }
+  }
+  r.ok = !r.onErr && !r.offErr;
+  return r;
+}
+
+function setNote(el, input, error, fallback) {
+  // Solo se marca en rojo si la persona ya escribió en ese campo
+  const show = error && input.dataset.userEdited;
+  el.textContent = show ? error : fallback;
+  el.classList.toggle('error', !!show);
+  input.setAttribute('aria-invalid', show ? 'true' : 'false');
+}
+
+function updateForm() {
+  const connected = !!configChar;
+  const v = validate();
+  const maxOn = status && status.maxOnSec;
+
+  setNote(onNote, onInput, v.onErr, maxOn ? 'Entre 5 s y ' + fmtMinutes(maxOn) + ' min.' : 'Mínimo 5 s.');
+  setNote(offNote, offInput, v.offErr,
+    v.onSec >= MIN_SEC ? 'Al menos el doble del riego (' + fmtMinutes(2 * v.onSec) + ' min).' : 'Al menos el doble del riego.');
+
+  const showFix = connected && v.fixOff && offInput.dataset.userEdited;
+  fixBtn.hidden = !showFix;
+  if (showFix) fixBtn.textContent = 'Usar ' + fmtMinutes(v.fixOff) + ' min de descanso';
+
+  summary.hidden = !(connected && v.ok);
+  if (v.ok) {
+    const perHour = Math.round((v.onSec / (v.onSec + v.offSec)) * 60);
+    summary.innerHTML = 'Regará <b>' + fmtMinSec(v.onSec) + '</b> y descansará <b>' + fmtMinSec(v.offSec) +
+      '</b>: unos <b>' + perHour + ' min</b> de riego por hora.';
+  }
+
+  const changed = status && (v.onSec !== status.onSec || v.offSec !== status.offSec);
+  saveBtn.disabled = !(connected && v.ok && changed && !pendingSave);
+  saveBtn.textContent = pendingSave ? 'Guardando…' : (connected && v.ok && !changed ? 'Sin cambios' : 'Guardar cambios');
+}
+
+function clearPending() {
+  if (pendingSave) clearTimeout(pendingSave.timer);
+  pendingSave = null;
+}
+
+function markEdited(input) {
+  input.dataset.userEdited = '1';
+  if (formMessage.classList.contains('ok')) setFormMessage('', '');
+  updateForm();
+}
+
+onInput.addEventListener('input', () => markEdited(onInput));
+offInput.addEventListener('input', () => markEdited(offInput));
+
+fixBtn.addEventListener('click', () => {
+  const v = validate();
+  if (!v.fixOff) return;
+  // Redondeo hacia arriba a 2 decimales para no quedar por debajo del mínimo
+  offInput.value = String(Math.ceil((v.fixOff / 60) * 100) / 100);
+  markEdited(offInput);
+  offInput.focus();
+});
+
+configForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!configChar || pendingSave) return;
+
+  onInput.dataset.userEdited = '1';
+  offInput.dataset.userEdited = '1';
+  const v = validate();
+  if (!v.ok) {
+    updateForm();
+    setFormMessage('Revisa los tiempos marcados en rojo.', 'error');
+    return;
+  }
+
+  pendingSave = {
+    onSec: v.onSec,
+    offSec: v.offSec,
+    timer: setTimeout(() => {
+      clearPending();
+      setFormMessage('La torre no confirmó el cambio. Intenta de nuevo.', 'error');
+      updateForm();
+    }, SAVE_TIMEOUT_MS),
+  };
+  setFormMessage('', '');
+  updateForm();
+
+  try {
+    const payload = JSON.stringify({ onSec: v.onSec, offSec: v.offSec });
+    await configChar.writeValue(new TextEncoder().encode(payload));
+  } catch (err) {
+    clearPending();
+    setFormMessage('No se pudo enviar: ' + err.message, 'error');
+    updateForm();
+  }
+});
+
+// ---------- Conexión ----------
+
+function setConnectedUI(connected) {
+  connectBlock.hidden = connected;
+  connBar.hidden = !connected;
+  onInput.disabled = !connected;
+  offInput.disabled = !connected;
+  configHint.hidden = connected;
+}
+
 function onDisconnected() {
-  connectBtn.textContent = 'Conectar con la torre';
-  connectBtn.classList.remove('connected');
-  connectBtn.disabled = false;
-  onInput.disabled = true;
-  offInput.disabled = true;
-  saveBtn.disabled = true;
-  pumpLabel.textContent = 'Sin conexión';
-  pumpLabel.className = 'pump-label state-off';
-  ring.className = 'ring off';
   if (tickHandle) clearInterval(tickHandle);
-  setFormMessage('Se perdió la conexión con la torre.', 'error');
+  clearPending();
+  statusChar = configChar = null;
+  status = null;
+  setConnectedUI(false);
+  connectBtn.disabled = false;
+  connectText.textContent = 'Conectar con la torre';
+
+  statusCard.dataset.state = 'idle';
+  stateTitle.textContent = 'Sin conexión';
+  stateDetail.textContent = manualDisconnect
+    ? 'Te desconectaste de la torre. Sigue regando sola.'
+    : 'Se perdió la conexión. La torre sigue regando sola; vuelve a conectarte.';
+  phaseBlock.hidden = true;
+  dataList.hidden = true;
+  delete onInput.dataset.userEdited;
+  delete offInput.dataset.userEdited;
+  setFormMessage('', '');
+  updateForm();
+  manualDisconnect = false;
 }
 
 async function connect() {
@@ -251,13 +515,18 @@ async function connect() {
     return;
   }
   connectBtn.disabled = true;
-  connectBtn.textContent = 'Buscando…';
+  connectText.textContent = 'Buscando…';
   try {
+    // El nombre va en el advertising y el UUID en el scan response:
+    // se filtra por nombre (o servicio) y se pide acceso al servicio.
     device = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [SERVICE_UUID] }]
+      filters: [{ name: DEVICE_NAME }, { services: [SERVICE_UUID] }],
+      optionalServices: [SERVICE_UUID],
     });
+    device.removeEventListener('gattserverdisconnected', onDisconnected);
     device.addEventListener('gattserverdisconnected', onDisconnected);
 
+    connectText.textContent = 'Conectando…';
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService(SERVICE_UUID);
     statusChar = await service.getCharacteristic(STATUS_UUID);
@@ -266,62 +535,37 @@ async function connect() {
     await statusChar.startNotifications();
     statusChar.addEventListener('characteristicvaluechanged', handleNotification);
 
+    deviceName.textContent = device.name || 'la torre';
+    setConnectedUI(true);
+    setFormMessage('', '');
+
     const initial = await statusChar.readValue();
     applyStatus(JSON.parse(new TextDecoder().decode(initial)));
-
-    connectBtn.textContent = 'Conectado';
-    connectBtn.classList.add('connected');
-    connectBtn.disabled = false;
-    onInput.disabled = false;
-    offInput.disabled = false;
-    saveBtn.disabled = false;
-    setFormMessage('', '');
   } catch (e) {
-    connectBtn.textContent = 'Conectar con la torre';
+    statusChar = configChar = null;
+    if (device) {
+      device.removeEventListener('gattserverdisconnected', onDisconnected);
+      if (device.gatt.connected) device.gatt.disconnect();
+    }
+    setConnectedUI(false);
     connectBtn.disabled = false;
-    setFormMessage('No se pudo conectar: ' + e.message, 'error');
+    connectText.textContent = 'Conectar con la torre';
+    connNote.textContent = e.name === 'NotFoundError'
+      ? 'No elegiste ninguna torre. Toca el botón para intentarlo de nuevo.'
+      : 'No se pudo conectar (' + e.message + '). Acércate a la torre e intenta de nuevo.';
   }
 }
 
-connectBtn.addEventListener('click', () => {
-  if (connectBtn.classList.contains('connected')) return;
-  connect();
-});
+connectBtn.addEventListener('click', connect);
 
-onInput.addEventListener('input', () => { onInput.dataset.userEdited = '1'; });
-offInput.addEventListener('input', () => { offInput.dataset.userEdited = '1'; });
-
-configForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!configChar) return;
-
-  const onMin = parseFloat(onInput.value);
-  const offMin = parseFloat(offInput.value);
-
-  if (isNaN(onMin) || isNaN(offMin) || onMin <= 0 || offMin <= 0) {
-    setFormMessage('Ingresa tiempos válidos mayores a cero.', 'error');
-    return;
-  }
-  const onSecToSend = Math.round(onMin * 60);
-  const offSecToSend = Math.round(offMin * 60);
-
-  if (maxOnSec && onSecToSend > maxOnSec) {
-    setFormMessage('El tiempo encendido supera el máximo de ' + (maxOnSec / 60) + ' min permitido por la bomba.', 'error');
-    return;
-  }
-
-  try {
-    saveBtn.disabled = true;
-    setFormMessage('Guardando…', '');
-    formMessage.dataset.pendingSave = '1';
-    const payload = JSON.stringify({ onSec: onSecToSend, offSec: offSecToSend });
-    await configChar.writeValue(new TextEncoder().encode(payload));
-  } catch (err) {
-    setFormMessage('Error al enviar: ' + err.message, 'error');
-  } finally {
-    saveBtn.disabled = false;
+disconnectBtn.addEventListener('click', () => {
+  if (device && device.gatt.connected) {
+    manualDisconnect = true;
+    device.gatt.disconnect();
   }
 });
+
+updateForm();
 </script>
 </Base>
 
@@ -340,6 +584,7 @@ configForm.addEventListener('submit', async (e) => {
       radial-gradient(40rem 30rem at 100% 0%, rgb(36 92 34 / 0.45), transparent 70%),
       var(--color-verde-950);
   }
+  .panel-control [hidden] { display: none !important; }
 
   .panel-control .app {
     width: 100%;
@@ -360,6 +605,7 @@ configForm.addEventListener('submit', async (e) => {
     margin: 0 0 1.5rem;
     max-width: 34ch;
   }
+  .panel-control .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
   /* --- Aviso de compatibilidad --- */
   .panel-control .aviso-compat {
@@ -372,9 +618,71 @@ configForm.addEventListener('submit', async (e) => {
     color: var(--color-ambar);
     box-shadow: inset 0 0 0 1px rgb(230 179 90 / 0.3);
   }
-  .panel-control .aviso-compat[hidden] { display: none; }
   .panel-control .aviso-compat strong { display: block; color: var(--color-crema); }
   .panel-control .aviso-compat p { margin: 0.3rem 0 0; font-size: 0.85rem; color: rgb(250 237 221 / 0.75); }
+
+  /* --- Conexión --- */
+  .panel-control .connect-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 1rem;
+    border: none;
+    border-radius: 999px;
+    background: var(--color-hoja);
+    color: var(--color-verde-950);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin: 0 0 0.75rem;
+    box-shadow: 0 12px 30px -12px rgb(124 191 85 / 0.6);
+    transition: transform 0.2s, filter 0.2s;
+  }
+  .panel-control .connect-btn:hover { filter: brightness(1.05); }
+  .panel-control .connect-btn:active { transform: translateY(1px) scale(0.99); }
+  .panel-control .connect-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .panel-control .conn-note {
+    font-size: 0.78rem;
+    color: rgb(250 237 221 / 0.68);
+    text-align: center;
+    margin: 0 0 1.25rem;
+  }
+
+  .panel-control .conn-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+    color: rgb(250 237 221 / 0.75);
+    padding: 0 0.35rem;
+    margin-bottom: 0.85rem;
+  }
+  .panel-control .conn-bar b { color: var(--color-crema); font-weight: 600; }
+  .panel-control .conn-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-hoja);
+    box-shadow: 0 0 0 4px rgb(124 191 85 / 0.18);
+    flex-shrink: 0;
+  }
+  .panel-control .conn-off {
+    margin-left: auto;
+    background: none;
+    border: none;
+    padding: 0.35rem 0;
+    color: rgb(250 237 221 / 0.6);
+    font: inherit;
+    font-size: 0.8rem;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .panel-control .conn-off:hover { color: var(--color-crema); }
 
   /* --- Tarjetas --- */
   .panel-control .status-card,
@@ -386,143 +694,165 @@ configForm.addEventListener('submit', async (e) => {
     margin-bottom: 1rem;
   }
 
-  .panel-control .indicator-row {
+  /* --- Estado: el color del tono cambia según data-state --- */
+  .panel-control .status-card { --tono: rgb(250 237 221 / 0.5); }
+  .panel-control .status-card[data-state='ON'] { --tono: var(--color-hoja); }
+  .panel-control .status-card[data-state='OFF'] { --tono: var(--color-agua); }
+  .panel-control .status-card[data-state='NO_WATER'] { --tono: var(--color-alerta); }
+  .panel-control .status-card[data-state='HOUR_LIMIT'] { --tono: var(--color-ambar); }
+
+  .panel-control .estado {
     display: flex;
     align-items: center;
-    gap: 1.1rem;
-    padding-left: 0.3rem; /* espacio para el pulso del anillo */
-    margin-bottom: 1.25rem;
+    gap: 1rem;
   }
-  .panel-control .ring {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: rgb(250 237 221 / 0.35);
+  .panel-control .estado-icono {
     position: relative;
+    display: grid;
+    place-items: center;
+    width: 3.25rem;
+    height: 3.25rem;
     flex-shrink: 0;
+    border-radius: 50%;
+    color: var(--tono);
+    background: color-mix(in srgb, var(--tono) 16%, transparent);
+    transition: color 0.3s, background-color 0.3s;
   }
-  .panel-control .ring::after {
+  .panel-control .estado-icono .ico { display: none; width: 1.6rem; height: 1.6rem; }
+  .panel-control [data-state='idle'] .ico-idle,
+  .panel-control [data-state='ON'] .ico-on,
+  .panel-control [data-state='OFF'] .ico-off,
+  .panel-control [data-state='NO_WATER'] .ico-nowater,
+  .panel-control [data-state='HOUR_LIMIT'] .ico-limit { display: block; }
+
+  .panel-control [data-state='ON'] .estado-icono::after {
     content: '';
     position: absolute;
-    inset: -5px;
+    inset: 0;
     border-radius: 50%;
-    border: 1.5px solid transparent;
-  }
-  .panel-control .ring.on { background: var(--color-hoja); }
-  .panel-control .ring.on::after {
-    border-color: var(--color-hoja);
+    border: 1.5px solid var(--tono);
     animation: pulso 1.8s ease-out infinite;
   }
   @keyframes pulso {
     0%   { transform: scale(1);   opacity: 0.7; }
-    100% { transform: scale(1.8); opacity: 0; }
+    100% { transform: scale(1.45); opacity: 0; }
   }
-  .panel-control .pump-label { font-family: var(--font-display); font-size: 1.35rem; font-weight: 500; }
-  .panel-control .pump-label .state-word { font-weight: 700; }
-  .panel-control .pump-label.state-on .state-word { color: var(--color-hoja); }
-  .panel-control .pump-label.state-off .state-word { color: rgb(250 237 221 / 0.6); }
 
-  /* --- Barra de ciclo --- */
-  .panel-control .cycle-bar {
-    height: 10px;
-    border-radius: 999px;
-    overflow: hidden;
-    display: flex;
-    background: rgb(250 237 221 / 0.08);
-    margin-bottom: 0.4rem;
+  .panel-control .estado-titulo {
+    font-family: var(--font-display);
+    font-variation-settings: 'SOFT' 100;
+    font-size: 1.45rem;
+    font-weight: 600;
+    line-height: 1.15;
+    margin: 0;
   }
-  .panel-control .cycle-bar .seg-on { background: rgb(124 191 85 / 0.45); height: 100%; position: relative; }
-  .panel-control .cycle-bar .seg-off { background: rgb(250 237 221 / 0.08); height: 100%; }
-  .panel-control .cycle-marker {
-    position: absolute;
-    top: -3px;
-    width: 4px;
-    height: 16px;
-    background: var(--color-agua);
-    border-radius: 2px;
-    box-shadow: 0 0 10px var(--color-agua);
-    transition: left 0.9s linear;
+  .panel-control .estado-detalle {
+    font-size: 0.85rem;
+    color: rgb(250 237 221 / 0.7);
+    margin: 0.2rem 0 0;
   }
-  .panel-control .cycle-caption {
+
+  /* --- Progreso de la fase --- */
+  .panel-control .fase { margin-top: 1.4rem; }
+  .panel-control .fase-fila {
     display: flex;
     justify-content: space-between;
-    font-size: 0.72rem;
-    color: rgb(250 237 221 / 0.68);
-    margin-bottom: 1.25rem;
+    align-items: baseline;
+    font-size: 0.85rem;
+    color: rgb(250 237 221 / 0.7);
+    margin-bottom: 0.55rem;
   }
+  .panel-control .fase-tiempo { font-size: 1.6rem; font-weight: 500; color: var(--color-crema); }
 
-  .panel-control .readouts {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.6rem;
-  }
-  .panel-control .readout {
-    background: rgb(11 36 11 / 0.55);
-    border-radius: 1rem;
-    padding: 0.7rem 0.5rem;
-    text-align: center;
-  }
-  .panel-control .readout-label {
-    display: block;
-    font-size: 0.68rem;
-    color: rgb(250 237 221 / 0.68);
-    margin-bottom: 0.2rem;
-  }
-  .panel-control .readout-value {
-    font-family: var(--font-mono);
-    font-size: 1.15rem;
-    font-weight: 500;
-  }
-
-  /* --- Botón conectar --- */
-  .panel-control .connect-btn {
-    width: 100%;
-    padding: 1rem;
-    border: none;
+  .panel-control .barra {
+    height: 8px;
     border-radius: 999px;
-    background: var(--color-hoja);
-    color: var(--color-verde-950);
-    font-family: var(--font-sans);
-    font-size: 1rem;
-    font-weight: 700;
-    cursor: pointer;
-    margin: 0.5rem 0 0.9rem;
-    box-shadow: 0 12px 30px -12px rgb(124 191 85 / 0.6);
-    transition: transform 0.2s, filter 0.2s;
+    background: rgb(250 237 221 / 0.1);
+    overflow: hidden;
   }
-  .panel-control .connect-btn:hover { filter: brightness(1.05); }
-  .panel-control .connect-btn:active { transform: translateY(1px) scale(0.99); }
-  .panel-control .connect-btn.connected {
-    background: transparent;
-    color: rgb(250 237 221 / 0.75);
-    box-shadow: inset 0 0 0 1.5px rgb(124 191 85 / 0.5);
+  .panel-control .barra-fina { height: 5px; }
+  .panel-control .barra-relleno {
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: var(--tono);
+    transition: width 1s linear, background-color 0.3s;
   }
-  .panel-control .connect-btn:disabled { opacity: 0.5; cursor: default; }
+  .panel-control #hourFill { background: var(--color-hoja); }
+  .panel-control #hourFill.lleno { background: var(--color-ambar); }
 
-  .panel-control .conn-note {
-    font-size: 0.78rem;
-    color: rgb(250 237 221 / 0.68);
-    text-align: center;
-    margin: 0 0 1.5rem;
+  /* --- Datos --- */
+  .panel-control .datos {
+    margin: 1.4rem 0 0;
+    padding-top: 0.4rem;
+    border-top: 1px solid rgb(250 237 221 / 0.08);
   }
+  .panel-control .dato {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0.25rem 1rem;
+    padding: 0.7rem 0;
+    font-size: 0.85rem;
+  }
+  .panel-control .dato + .dato { border-top: 1px solid rgb(250 237 221 / 0.06); }
+  .panel-control .dato dt { color: rgb(250 237 221 / 0.7); }
+  .panel-control .dato dd { margin: 0; text-align: right; }
+  .panel-control .dato .dato-barra { grid-column: 1 / -1; margin-top: 0.35rem; }
+
+  .panel-control .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .panel-control .chip::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .panel-control .chip-ok { color: var(--color-hoja); background: rgb(124 191 85 / 0.14); }
+  .panel-control .chip-alerta { color: #f0907c; background: rgb(217 100 79 / 0.16); }
 
   /* --- Configuración --- */
   .panel-control .config-card h2 {
     font-size: 1.25rem;
     font-weight: 600;
-    margin: 0 0 0.3rem;
+    margin: 0 0 1.1rem;
   }
   .panel-control .config-card .hint {
     font-size: 0.8rem;
-    color: var(--color-ambar);
-    margin: 0 0 1.1rem;
+    color: rgb(250 237 221 / 0.6);
+    margin: -0.8rem 0 1.1rem;
   }
-  .panel-control .field { margin-bottom: 1rem; }
+  .panel-control .campos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem;
+  }
+  .panel-control .field { margin-bottom: 0.6rem; min-width: 0; }
   .panel-control .field label {
     display: block;
-    font-size: 0.82rem;
-    color: rgb(250 237 221 / 0.7);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-crema);
     margin-bottom: 0.4rem;
+  }
+  .panel-control .field label span { font-weight: 400; color: rgb(250 237 221 / 0.6); font-size: 0.75rem; }
+  .panel-control .input-unidad { position: relative; }
+  .panel-control .input-unidad span {
+    position: absolute;
+    right: 0.85rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.8rem;
+    color: rgb(250 237 221 / 0.5);
+    pointer-events: none;
   }
   .panel-control .field input {
     width: 100%;
@@ -530,21 +860,55 @@ configForm.addEventListener('submit', async (e) => {
     border: none;
     box-shadow: inset 0 0 0 1px rgb(250 237 221 / 0.12);
     border-radius: 0.9rem;
-    padding: 0.75rem 0.85rem;
+    padding: 0.75rem 2.6rem 0.75rem 0.85rem;
     color: var(--color-crema);
     font-family: var(--font-mono);
-    font-size: 1rem;
+    font-size: 1.05rem;
+    -moz-appearance: textfield;
   }
+  .panel-control .field input::-webkit-outer-spin-button,
+  .panel-control .field input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .panel-control .field input:disabled { opacity: 0.55; }
   .panel-control .field input:focus-visible {
     outline: 2px solid var(--color-hoja);
     outline-offset: 1px;
   }
+  .panel-control .field input[aria-invalid='true'] { box-shadow: inset 0 0 0 1.5px #f0907c; }
   .panel-control .field .field-note {
     font-size: 0.72rem;
-    color: rgb(250 237 221 / 0.68);
-    margin-top: 0.3rem;
+    line-height: 1.35;
+    color: rgb(250 237 221 / 0.6);
+    margin: 0.4rem 0 0;
   }
+  .panel-control .field .field-note.error { color: #f0907c; }
+
+  .panel-control .fix-btn {
+    display: block;
+    width: 100%;
+    margin: 0 0 0.9rem;
+    padding: 0.6rem;
+    border: none;
+    border-radius: 0.9rem;
+    background: rgb(91 184 220 / 0.12);
+    color: var(--color-agua);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .panel-control .fix-btn:hover { background: rgb(91 184 220 / 0.2); }
+
+  .panel-control .resumen {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: rgb(250 237 221 / 0.75);
+    background: rgb(11 36 11 / 0.4);
+    border-radius: 0.9rem;
+    padding: 0.75rem 0.9rem;
+    margin: 0.2rem 0 1rem;
+  }
+  .panel-control .resumen b { color: var(--color-crema); font-weight: 600; }
+
   .panel-control .save-btn {
     width: 100%;
     padding: 0.9rem;
@@ -565,6 +929,7 @@ configForm.addEventListener('submit', async (e) => {
     margin: 0.8rem 0 0;
     font-size: 0.85rem;
     min-height: 1.1em;
+    text-align: center;
   }
   .panel-control .form-message.error { color: #f0907c; }
   .panel-control .form-message.ok { color: var(--color-hoja); }
@@ -580,8 +945,12 @@ configForm.addEventListener('submit', async (e) => {
     margin: 1.5rem 0 0;
   }
 
+  @media (max-width: 22rem) {
+    .panel-control .campos { grid-template-columns: 1fr; gap: 0; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .panel-control .ring.on::after { animation: none; }
-    .panel-control .cycle-marker { transition: none; }
+    .panel-control [data-state='ON'] .estado-icono::after { animation: none; }
+    .panel-control .barra-relleno { transition: none; }
   }
 </style>
