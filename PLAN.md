@@ -233,3 +233,10 @@ growa-landing/
 - [ ] Cifras de impacto (ahorro de agua, tiempo de cosecha, nº de plantas). *(Por ahora no hay; las secciones están escritas sin números.)*
 - [ ] Fotos recientes del producto / clientes (las actuales son de 2024).
 - [ ] Dominio y dónde se va a desplegar.
+
+### Corrección BLE — 2026-10-28
+- [x] Inspección del firmware real 5.1 en Descargas y del transporte NimBLE local.
+- [x] Recuperación por READ serializada, diagnóstico, control de antigüedad y cuenta sin deriva.
+- [x] Estados de protección/agua, uso móvil y confirmación de configuración adaptados.
+- [x] 10 pruebas simuladas aprobadas sin hardware; build correcto y Astro check sin errores, advertencias ni hints. Documentación en `docs/control-ble.md`.
+- [ ] Confirmar tamaños recibidos, lectura larga y ciclo con placa real en Chrome de computador y Android.

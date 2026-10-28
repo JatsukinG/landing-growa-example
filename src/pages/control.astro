@@ -1,6 +1,6 @@
 ---
 // Panel de control de la torre por Bluetooth (Web Bluetooth → ESP32-C3).
-// Protocolo descrito en ../CONTEXTO_TORRE_HIDROPONICA.md (UUIDs y formato JSON).
+// Protocolo y diagnóstico: docs/control-ble.md.
 // El firmware nuevo agrega `water`, `state`, `hourUsedSec` y `hourMaxSec`; si no
 // llegan (firmware viejo) el panel los deriva u oculta esas filas.
 // Los IDs que usa el <script is:inline> del final deben conservarse si cambia el diseño.
@@ -87,7 +87,7 @@ import Marca from '../components/Marca.astro';
             <dd><span class="chip" id="waterChip">—</span></dd>
           </div>
           <div class="dato" id="hourRow" hidden>
-            <dt>Uso de la bomba en la última hora</dt>
+            <dt>Uso en los últimos 60 minutos</dt>
             <dd class="mono" id="hourVal">—</dd>
             <dd class="dato-barra">
               <div class="barra barra-fina"><div class="barra-relleno" id="hourFill"></div></div>
@@ -135,7 +135,7 @@ import Marca from '../components/Marca.astro';
 
       <p class="ayuda">
         <Icon name="ph:lightbulb" class="size-4 shrink-0" />
-        La bomba trabaja como máximo 20 min por hora para cuidar su vida útil.
+        Máximo 20 minutos en una ventana móvil de 60 minutos. El uso no vuelve a cero cada hora.
       </p>
     </main>
   </div>
@@ -159,7 +159,7 @@ const STATUS_UUID  = '12345678-1234-5678-1234-56789abcdef1';
 const CONFIG_UUID  = '12345678-1234-5678-1234-56789abcdef2';
 
 const MIN_SEC = 5;            // mínimo que acepta el firmware para onSec y offSec
-const SAVE_TIMEOUT_MS = 6000; // si la torre no confirma en este tiempo, se avisa
+const SAVE_TIMEOUT_MS = 15000; // si la torre no confirma en este tiempo, se avisa
 
 const $ = (id) => document.getElementById(id);
 const connectBlock  = $('connectBlock');
@@ -200,6 +200,67 @@ let localRemaining = 0;     // cuenta regresiva local entre notificaciones
 let tickHandle = null;
 let pendingSave = null;     // { onSec, offSec, timer } mientras se espera confirmación
 let manualDisconnect = false;
+let zeroRequested = false;
+let receivedAt = null, deadline = null, backupHandle = null;
+let connectedAt = null, lastReadAt = -Infinity;
+let generation = 0, readPending = false, gattQueue = Promise.resolve();
+const diagnostics = { lastValidAt: null, validUpdates: 0, lastValidBytes: null, lastMessageBytes: 0, lastValueChangedBytes: null, lastReadBytes: null, lastReadError: null, lastParseError: null, parseErrors: 0, readErrors: 0 };
+// Solo telemetría del transporte; no se registran contenidos ni datos personales.
+window.growaBleDiagnostics = diagnostics;
+function enqueueGatt(operation) {
+  const session = generation;
+  const result = gattQueue.then(() => {
+    if (session !== generation) throw new Error('Sesión BLE terminada');
+    return operation();
+  });
+  gattQueue = result.catch(() => {});
+  return result;
+}
+function receive(value, source = 'valuechanged') {
+  diagnostics.lastMessageBytes = value.byteLength;
+  diagnostics[source === 'read' ? 'lastReadBytes' : 'lastValueChangedBytes'] = value.byteLength;
+  try {
+    const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(value));
+    applyStatus(raw);
+    diagnostics.lastValidBytes = value.byteLength;
+    return true;
+  } catch (error) {
+    diagnostics.parseErrors++;
+    diagnostics.lastParseError = { at: new Date().toISOString(), source, bytes: value.byteLength, kind: error.name };
+    console.warn('[BLE] Estado inválido', diagnostics.lastParseError);
+    return false;
+  }
+}
+async function requestStatus() {
+  if (!statusChar || readPending || performance.now() - lastReadAt < 1500) return;
+  lastReadAt = performance.now();
+  readPending = true;
+  const characteristic = statusChar, session = generation;
+  try {
+    const value = await enqueueGatt(() => characteristic.readValue());
+    if (session === generation) receive(value, 'read');
+  } catch (error) {
+    if (session === generation) {
+      diagnostics.readErrors++;
+      diagnostics.lastReadError = { at: new Date().toISOString(), kind: error.name };
+      console.warn('[BLE] Falló READ', error.message);
+    }
+  } finally {
+    if (session === generation) readPending = false;
+  }
+}
+function cleanupTransport() {
+  generation++;
+  if (statusChar) statusChar.removeEventListener('characteristicvaluechanged', handleNotification);
+  clearInterval(tickHandle);
+  clearInterval(backupHandle);
+  tickHandle = backupHandle = null;
+  readPending = false;
+  receivedAt = deadline = connectedAt = null;
+  lastReadAt = -Infinity;
+  gattQueue = Promise.resolve();
+}
+
 
 // ---------- Formato ----------
 
@@ -241,17 +302,27 @@ function setFill(el, ratio) {
 // los demás campos nuevos quedan en null y sus filas se ocultan.
 function normalize(data) {
   const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+  if (!data || typeof data !== 'object' || Array.isArray(data) ||
+      ![0, 1].includes(data.pump) ||
+      (data.state !== undefined && !['ON', 'OFF', 'NO_WATER', 'HOUR_LIMIT'].includes(data.state)) ||
+      !Number.isFinite(data.remainingSec) || data.remainingSec < 0) {
+    throw new Error('Campos de estado inválidos');
+  }
   const pumpOn = data.pump === 1;
   const known = ['ON', 'OFF', 'NO_WATER', 'HOUR_LIMIT'];
   return {
     pumpOn,
+    configPending: data.configPending === true || data.configPending === 1,
+    recoveryRemainingSec: num(data.recoveryRemainingSec) ?? 0,
+    protectionWaitSec: num(data.protectionWaitSec),
+    nextWateringSec: num(data.nextWateringSec),
     state: known.includes(data.state) ? data.state : (pumpOn ? 'ON' : 'OFF'),
     onSec: num(data.onSec),
     offSec: num(data.offSec),
     maxOnSec: num(data.maxOnSec),
     remainingSec: num(data.remainingSec) ?? 0,
     water: data.water === 0 || data.water === 1 ? data.water : null,
-    hourUsedSec: num(data.hourUsedSec),
+    hourUsedSec: num(data.hourUsedSec) ?? (num(data.hourUsedMs) === null ? null : Math.floor(data.hourUsedMs / 1000)),
     hourMaxSec: num(data.hourMaxSec),
     error: typeof data.error === 'string' && data.error ? data.error : null,
   };
@@ -262,14 +333,14 @@ function stateTexts(s) {
     case 'ON':
       return ['Regando', 'La bomba está encendida.'];
     case 'OFF':
-      return ['En espera', 'La bomba descansa hasta el próximo riego.'];
+      return ['En descanso', s.nextWateringSec === null ? 'La bomba está apagada. Esperando estimación de la torre.' : 'La bomba descansa hasta el próximo riego.'];
     case 'NO_WATER':
       return s.water === 1
-        ? ['Sin agua en el tanque', 'Agua detectada. El riego se reanuda en unos segundos.']
-        : ['Sin agua en el tanque', 'Riego detenido. Rellena el tanque y el riego se reanudará solo.'];
+        ? ['Falta de agua', 'Agua detectada. El riego se reanuda en unos segundos.']
+        : ['Falta de agua', 'Riego detenido. Rellena el tanque y el riego se reanudará solo.'];
     case 'HOUR_LIMIT': {
       const max = s.hourMaxSec ? fmtMinutes(s.hourMaxSec) + ' min' : 'su límite';
-      return ['Pausa de protección', 'La bomba ya trabajó ' + max + ' en la última hora. Descansa y retoma sola.'];
+      return ['Pausa de protección', 'Espera disponibilidad en la ventana móvil para el siguiente riego (máximo ' + max + ').'];
     }
   }
 }
@@ -280,21 +351,40 @@ function phaseTotal() {
 }
 
 function renderPhase() {
+  if (!status) return;
+  const age = receivedAt === null ? Infinity : performance.now() - receivedAt;
+  const stale = age > 8000;
+  const expired = deadline !== null && performance.now() >= deadline;
   const total = phaseTotal();
-  const active = status && (status.state === 'ON' || status.state === 'OFF') && total > 0;
+  const active = deadline !== null && !stale && !expired;
   phaseBlock.hidden = !active;
+  if (stale || expired) {
+    statusCard.dataset.state = 'idle';
+    stateTitle.textContent = stale ? 'Datos desactualizados' : 'Actualizando estado…';
+    stateDetail.textContent = 'Esperando confirmación de la torre. El riego funciona de forma autónoma.';
+    return;
+  }
   if (!active) return;
-  phaseLabel.textContent = status.state === 'ON' ? 'Se apaga en' : 'Próximo riego en';
+  localRemaining = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
+  phaseLabel.textContent = status.recoveryRemainingSec > 0 ? 'Espera tras reinicio' : status.state === 'HOUR_LIMIT' ? 'Espera estimada' : status.state === 'ON' ? 'Se apaga en' : 'Próximo riego estimado en';
   remainingVal.textContent = fmtMinSec(localRemaining);
-  setFill(phaseFill, 1 - Math.min(localRemaining, total) / total);
+  setFill(phaseFill, total > 0 ? 1 - Math.min(localRemaining, total) / total : 0);
 }
 
 function renderStatus() {
   const s = status;
+  if (!s) {
+    if (connectedAt !== null && performance.now() - connectedAt > 8000) {
+      stateTitle.textContent = 'Datos desactualizados';
+      stateDetail.textContent = 'No se ha recibido un estado válido de la torre.';
+    }
+    return;
+  }
+  if (deadline !== null) localRemaining = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
   statusCard.dataset.state = s.state;
   const [title, detail] = stateTexts(s);
   stateTitle.textContent = title;
-  stateDetail.textContent = detail;
+  stateDetail.textContent = detail + (s.recoveryRemainingSec > 0 ? ' Espera tras reinicio: ' + fmtMinSec(localRemaining) + '.' : '');
 
   renderPhase();
   dataList.hidden = false;
@@ -308,8 +398,8 @@ function renderStatus() {
   const hasHour = s.hourUsedSec !== null && s.hourMaxSec > 0;
   hourRow.hidden = !hasHour;
   if (hasHour) {
-    // Minutos enteros: evita decimales y que el texto cambie de ancho cada 2 s
-    hourVal.textContent = Math.floor(s.hourUsedSec / 60) + ' de ' + Math.round(s.hourMaxSec / 60) + ' min';
+    // El uso es el reportado por la placa; no se incrementa localmente.
+    hourVal.textContent = fmtMinSec(s.hourUsedSec) + ' de ' + fmtMinSec(s.hourMaxSec);
     const ratio = s.hourUsedSec / s.hourMaxSec;
     setFill(hourFill, ratio);
     hourFill.classList.toggle('lleno', ratio >= 0.9 || s.state === 'HOUR_LIMIT');
@@ -323,14 +413,27 @@ function renderStatus() {
 function restartTicker() {
   if (tickHandle) clearInterval(tickHandle);
   tickHandle = setInterval(() => {
-    if (localRemaining > 0) localRemaining -= 1;
-    renderPhase();
+    renderStatus();
+    if (deadline !== null && performance.now() >= deadline && !zeroRequested) {
+      zeroRequested = true;
+      requestStatus();
+    }
   }, 1000);
 }
 
 function applyStatus(raw) {
   status = normalize(raw);
-  localRemaining = status.remainingSec;
+  zeroRequested = false;
+  receivedAt = performance.now();
+  diagnostics.lastValidAt = new Date().toISOString();
+  diagnostics.validUpdates++;
+  const remaining = status.recoveryRemainingSec > 0 ? status.recoveryRemainingSec
+    : status.state === 'HOUR_LIMIT' ? (status.protectionWaitSec ?? status.remainingSec)
+    : status.state === 'NO_WATER' ? null
+    : status.state === 'OFF' && raw.nextWateringSec === null ? null
+    : status.state === 'OFF' ? (status.nextWateringSec ?? status.remainingSec) : status.remainingSec;
+  localRemaining = remaining ?? 0;
+  deadline = remaining === null ? null : receivedAt + remaining * 1000;
   renderStatus();
   restartTicker();
 
@@ -339,35 +442,41 @@ function applyStatus(raw) {
 
   if (status.error) {
     clearPending();
-    setFormMessage('La torre rechazó el cambio: ' + status.error, 'error');
-  } else if (pendingSave && status.onSec === pendingSave.onSec && status.offSec === pendingSave.offSec) {
+    setFormMessage('Rechazada: ' + status.error, 'error');
+  } else if (pendingSave && status.onSec === pendingSave.onSec && status.offSec === pendingSave.offSec && !status.configPending) {
+    // Conservar ediciones hechas mientras se aplicaba la solicitud anterior.
+    if (Math.abs(Number(onInput.value) * 60 - pendingSave.onSec) < 1e-9) delete onInput.dataset.userEdited;
+    if (Math.abs(Number(offInput.value) * 60 - pendingSave.offSec) < 1e-9) delete offInput.dataset.userEdited;
     clearPending();
-    delete onInput.dataset.userEdited;
-    delete offInput.dataset.userEdited;
-    setFormMessage('Cambios guardados en la torre.', 'ok');
+    setFormMessage('Aplicada: cambios confirmados por la torre.', 'ok');
+  }
+  if (pendingSave && status.configPending) {
+    clearTimeout(pendingSave.timer);
+    setFormMessage('Pendiente de aplicar: la torre espera a que la bomba esté apagada.', '');
   }
   updateForm();
 }
 
 function handleNotification(event) {
-  const text = new TextDecoder().decode(event.target.value);
-  try {
-    applyStatus(JSON.parse(text));
-  } catch (e) { /* mensaje incompleto, se ignora */ }
+  // No concatenar: el protocolo no define fragmentos ni identificadores.
+  if (event.target !== statusChar) return;
+  if (!receive(event.target.value)) requestStatus();
 }
 
 // ---------- Formulario ----------
 
 function validate() {
   const r = { onSec: null, offSec: null, onErr: '', offErr: '', fixOff: null };
-  const maxOn = status && status.maxOnSec;
-  const onMin = parseFloat(onInput.value);
-  const offMin = parseFloat(offInput.value);
+  const maxOn = Math.min(900, (status && status.maxOnSec) || 900);
+  const onMin = Number(onInput.value);
+  const offMin = Number(offInput.value);
 
   if (!(onMin > 0)) {
     r.onErr = 'Escribe cuántos minutos riega.';
   } else {
-    r.onSec = Math.round(onMin * 60);
+    r.onSec = onMin * 60;
+    if (Math.abs(r.onSec - Math.round(r.onSec)) < 1e-9) r.onSec = Math.round(r.onSec);
+    if (!Number.isInteger(r.onSec)) r.onErr = 'Usa segundos enteros.';
     if (r.onSec < MIN_SEC) r.onErr = 'Mínimo 5 segundos (0,1 min).';
     else if (maxOn && r.onSec > maxOn) r.onErr = 'Máximo ' + fmtMinutes(maxOn) + ' min: es el límite de la bomba.';
   }
@@ -375,8 +484,11 @@ function validate() {
   if (!(offMin > 0)) {
     r.offErr = 'Escribe cuántos minutos descansa.';
   } else {
-    r.offSec = Math.round(offMin * 60);
+    r.offSec = offMin * 60;
+    if (Math.abs(r.offSec - Math.round(r.offSec)) < 1e-9) r.offSec = Math.round(r.offSec);
+    if (!Number.isInteger(r.offSec)) r.offErr = 'Usa segundos enteros.';
     if (r.offSec < MIN_SEC) r.offErr = 'Mínimo 5 segundos (0,1 min).';
+    else if (r.offSec > 86400) r.offErr = 'Máximo 86400 segundos (1440 min).';
     else if (!r.onErr && r.offSec < 2 * r.onSec) {
       r.offErr = 'Debe ser al menos el doble del riego: ' + fmtMinutes(2 * r.onSec) + ' min o más.';
       r.fixOff = 2 * r.onSec;
@@ -397,7 +509,7 @@ function setNote(el, input, error, fallback) {
 function updateForm() {
   const connected = !!configChar;
   const v = validate();
-  const maxOn = status && status.maxOnSec;
+  const maxOn = Math.min(900, (status && status.maxOnSec) || 900);
 
   setNote(onNote, onInput, v.onErr, maxOn ? 'Entre 5 s y ' + fmtMinutes(maxOn) + ' min.' : 'Mínimo 5 s.');
   setNote(offNote, offInput, v.offErr,
@@ -436,8 +548,8 @@ offInput.addEventListener('input', () => markEdited(offInput));
 fixBtn.addEventListener('click', () => {
   const v = validate();
   if (!v.fixOff) return;
-  // Redondeo hacia arriba a 2 decimales para no quedar por debajo del mínimo
-  offInput.value = String(Math.ceil((v.fixOff / 60) * 100) / 100);
+  // Mantener la precisión necesaria para representar segundos enteros.
+  offInput.value = String(v.fixOff / 60);
   markEdited(offInput);
   offInput.focus();
 });
@@ -455,6 +567,7 @@ configForm.addEventListener('submit', async (e) => {
     return;
   }
 
+  const session = generation;
   pendingSave = {
     onSec: v.onSec,
     offSec: v.offSec,
@@ -464,13 +577,18 @@ configForm.addEventListener('submit', async (e) => {
       updateForm();
     }, SAVE_TIMEOUT_MS),
   };
-  setFormMessage('', '');
+  setFormMessage('Enviando…', '');
   updateForm();
 
   try {
     const payload = JSON.stringify({ onSec: v.onSec, offSec: v.offSec });
-    await configChar.writeValue(new TextEncoder().encode(payload));
+    const characteristic = configChar;
+    await enqueueGatt(() => characteristic.writeValue(new TextEncoder().encode(payload)));
+    if (session !== generation) return;
+    if (pendingSave) setFormMessage('Pendiente de aplicar: esperando confirmación de la torre.', '');
+    requestStatus();
   } catch (err) {
+    if (session !== generation) return;
     clearPending();
     setFormMessage('No se pudo enviar: ' + err.message, 'error');
     updateForm();
@@ -488,7 +606,8 @@ function setConnectedUI(connected) {
 }
 
 function onDisconnected() {
-  if (tickHandle) clearInterval(tickHandle);
+  if (device) device.removeEventListener('gattserverdisconnected', onDisconnected);
+  cleanupTransport();
   clearPending();
   statusChar = configChar = null;
   status = null;
@@ -528,27 +647,44 @@ async function connect() {
     device.addEventListener('gattserverdisconnected', onDisconnected);
 
     connectText.textContent = 'Conectando…';
+    cleanupTransport();
+    const session = generation;
     const server = await device.gatt.connect();
+    if (session !== generation) throw new Error('Conexión interrumpida');
     const service = await server.getPrimaryService(SERVICE_UUID);
     statusChar = await service.getCharacteristic(STATUS_UUID);
     configChar = await service.getCharacteristic(CONFIG_UUID);
 
-    await statusChar.startNotifications();
+    if (session !== generation) throw new Error('Conexión interrumpida');
     statusChar.addEventListener('characteristicvaluechanged', handleNotification);
+    await enqueueGatt(() => statusChar.startNotifications());
 
+    if (session !== generation) throw new Error('Conexión interrumpida');
+    connectedAt = performance.now();
     deviceName.textContent = device.name || 'la torre';
     setConnectedUI(true);
     setFormMessage('', '');
 
-    const initial = await statusChar.readValue();
-    applyStatus(JSON.parse(new TextDecoder().decode(initial)));
+    if (!status) stateTitle.textContent = 'Actualizando estado…';
+    if (status) renderStatus();
+    restartTicker();
+    backupHandle = setInterval(requestStatus, 5000);
+    await requestStatus();
+    if (session !== generation) throw new Error('Conexión interrumpida');
   } catch (e) {
+    cleanupTransport();
+    clearPending();
+    status = null;
     statusChar = configChar = null;
     if (device) {
       device.removeEventListener('gattserverdisconnected', onDisconnected);
       if (device.gatt.connected) device.gatt.disconnect();
     }
     setConnectedUI(false);
+    statusCard.dataset.state = 'idle';
+    stateTitle.textContent = 'Sin conexión';
+    stateDetail.textContent = 'No se pudo completar la conexión con la torre.';
+    phaseBlock.hidden = dataList.hidden = true;
     connectBtn.disabled = false;
     connectText.textContent = 'Conectar con la torre';
     connNote.textContent = e.name === 'NotFoundError'
@@ -556,6 +692,13 @@ async function connect() {
       : 'No se pudo conectar (' + e.message + '). Acércate a la torre e intenta de nuevo.';
   }
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && statusChar) {
+    if (status) renderStatus();
+    requestStatus();
+  }
+});
 
 connectBtn.addEventListener('click', connect);
 

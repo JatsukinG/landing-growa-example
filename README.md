@@ -9,6 +9,7 @@ Hecho con **Astro 7 + Tailwind CSS v4**. Plan y estado del proyecto: [`PLAN.md`]
 | :---------------- | :------------------------------------------------ |
 | `npm install`     | Instala dependencias                              |
 | `npm run dev`     | Servidor de desarrollo en `http://localhost:4321` |
+| `npm test`        | Ejecuta simulaciones BLE sin conectar con hardware |
 | `npm run build`   | Genera el sitio estático en `dist/`               |
 | `npm run preview` | Sirve `dist/` para revisarlo antes de publicar    |
 
@@ -19,7 +20,7 @@ Hecho con **Astro 7 + Tailwind CSS v4**. Plan y estado del proyecto: [`PLAN.md`]
 - **Dominio del sitio**: `site` en `astro.config.mjs` (canonical, imagen para compartir, sitemap y robots.txt).
 - **Colores, fuentes, botones**: bloque `@theme` y componentes en `src/styles/global.css`.
 - **Secciones de la landing**: `src/components/` (Hero, QueEs, ComoFunciona, Ventajas, Producto, Contacto, Footer).
-- **Panel Bluetooth**: `src/pages/control.astro`. El script BLE es copia exacta del original; si se cambia el diseño, conservar los IDs y clases que usa.
+- **Panel Bluetooth**: `src/pages/control.astro`. Recepción BLE con recuperación por READ y control de antigüedad; conservar los IDs que usa el script. Diagnóstico y protocolo en [docs/control-ble.md](docs/control-ble.md).
 
 ## Al tener los datos reales
 
